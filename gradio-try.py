@@ -15,7 +15,7 @@ class gradio_ui(object):
         self.extractor = Extractor(None,output_dir="temp")
         self.d = dd.DeepDanbooru()
         self.chara_tags = None
-        self.chara_dict = {}
+        self.chara_dict = {'None':{}}
 
         self.current_tags = []
         #only for add tags
@@ -35,7 +35,8 @@ class gradio_ui(object):
         output_dir = "temp"
         cmd = f"ffmpeg -i {video} "
     def get_scene(self,start_frameCnt):
-        frames = self.extractor.extract_scene(start_frameCnt)
+        # frames = self.extractor.extract_scene(start_frameCnt)
+        frames = self.extractor.extract_refs(start_frameCnt)
         print(len(frames))
         imgs = [cv2.cvtColor(f.img,cv2.COLOR_BGR2RGB) for f in frames ]
         print('Scene frames: ' ,len(imgs))
@@ -148,58 +149,62 @@ class gradio_ui(object):
             gr.Textbox.update(value=None),\
             gr.CheckboxGroup.update(choices=None,value=[]),\
             gr.Dropdown.update(choices=list(self.chara_dict.keys()),interactive=True)
-    def switch_chara(self,chara_name):
-        self.current_chara = self.chara_dict[chara_name]
-        return gr.Image.update(value=self.current_chara['img']),\
-               gr.Textbox.update(value=self.current_chara['name']),\
-               gr.CheckboxGroup.update(choices=self.current_chara['tags'],
-                                       value=self.current_chara['tags'])
+    def switch_chara(self,img,cname,tags,chara_name):
+        if chara_name=='None':
+            return img,cname,tags
+        else:
+            self.current_chara = self.chara_dict[chara_name]
+            return gr.Image.update(value=self.current_chara['img']),\
+                   gr.Textbox.update(value=self.current_chara['name']),\
+                   gr.CheckboxGroup.update(choices=self.current_chara['tags'],
+                                           value=self.current_chara['tags'])
+
     def interface(self):
 
-        original = gradio.routes.templates.TemplateResponse
-        script_path = "script.js"
-        style_path = "style.css"
-        with open(style_path) as f:
-            css_str = f.read()
-        injection_js = ""
-        with open(script_path) as f:
-            injection_js += f.read()
-        #inject jquery
-        injection_js += """<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>"""
-        # inject bootstrap
-        injection_js += """<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js" integrity="sha384-oBqDVmMz9ATKxIep9tiCxS/Z9fNfEXiDAYTujMAeBAsjFuCZSmKbSSUnQlmh/jp3" crossorigin="anonymous"></script>
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js" integrity="sha384-mQ93GR66B00ZXjt0YO5KlohRA5SY2XofN4zfuZxLkoj1gXtW8ANNCe9d5Y3eG5eD" crossorigin="anonymous"></script>"""
-        # inject custom js
-        injection_js += '<script type="text/javascript">'
-        with open(script_path) as f:
-            s = f.read()
-            print(s)
-            injection_js += s
-        injection_js += '</script>'
-        def template_response(*args, **kwargs):
-            print("Hello from modified reponse")
-            res = original(*args, **kwargs)#<starlette.templating._TemplateResponse object
-            # print(res.body)
-            res_str = res.body.decode(encoding='utf-8')
-            idx = res_str.find('</body>')
-            res_str = res_str[:idx]+injection_js+res_str[idx:]
-            res.body = bytes(res_str,'utf-8')
-            # res.body = res.body.replace(
-            #     b'</head>', f'{javascript}</head>'.encode("utf8"))
-            res.init_headers()
-            return res
-        gradio.routes.templates.TemplateResponse = template_response
-        print("Css styles:",css_str)
+        # original = gradio.routes.templates.TemplateResponse
+        # script_path = "script.js"
+        # style_path = "style.css"
+        # with open(style_path) as f:
+        #     css_str = f.read()
+        # injection_js = ""
+        # with open(script_path) as f:
+        #     injection_js += f.read()
+        # #inject jquery
+        # injection_js += """<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>"""
+        # # inject bootstrap
+        # injection_js += """<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js" integrity="sha384-oBqDVmMz9ATKxIep9tiCxS/Z9fNfEXiDAYTujMAeBAsjFuCZSmKbSSUnQlmh/jp3" crossorigin="anonymous"></script>
+        # <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js" integrity="sha384-mQ93GR66B00ZXjt0YO5KlohRA5SY2XofN4zfuZxLkoj1gXtW8ANNCe9d5Y3eG5eD" crossorigin="anonymous"></script>"""
+        # # inject custom js
+        # injection_js += '<script type="text/javascript">'
+        # with open(script_path) as f:
+        #     s = f.read()
+        #     print(s)
+        #     injection_js += s
+        # injection_js += '</script>'
+        # def template_response(*args, **kwargs):
+        #     print("Hello from modified reponse")
+        #     res = original(*args, **kwargs)#<starlette.templating._TemplateResponse object
+        #     # print(res.body)
+        #     res_str = res.body.decode(encoding='utf-8')
+        #     idx = res_str.find('</body>')
+        #     res_str = res_str[:idx]+injection_js+res_str[idx:]
+        #     res.body = bytes(res_str,'utf-8')
+        #     # res.body = res.body.replace(
+        #     #     b'</head>', f'{javascript}</head>'.encode("utf8"))
+        #     res.init_headers()
+        #     return res
+        # gradio.routes.templates.TemplateResponse = template_response
+        # print("Css styles:",css_str)
 
-        imgs = []
-        img_dir = 'images'
-        for f in os.listdir(img_dir):
-            img = Image.open(os.path.join(img_dir,f))
-            imgs.append(img)
+        # imgs = []
+        # img_dir = 'images'
+        # for f in os.listdir(img_dir):
+        #     img = Image.open(os.path.join(img_dir,f))
+        #     imgs.append(img)
 
         vid_input = gr.Video(label='Input video',elem_id='vid_input')
         vid_extract_keyframes = gr.Button(value='Extract Scenes')
-        vid_keyframe_gallery = gr.Gallery(label="Keyframes",elem_id='kfgallery',value=imgs)
+        vid_keyframe_gallery = gr.Gallery(label = "Keyframes")
         vid_keyframe_gallery.style(grid=10,height="300px")
 
         vid_keyframe_set = []
@@ -211,7 +216,7 @@ class gradio_ui(object):
             vid_keyframe_set.append(img)
             # vid_keyframe_set.append(gr.Image(visible=False,interactive=False))
             vid_keyframe_btn_set.append(gr.Button(visible=False,interactive=False))
-        vid_keyframe_gallery = gr.Gallery(label = "Keyframes")
+
 
         chara_img = gr.Image(label='Character Reference')
         chara_tags = gr.CheckboxGroup(choices=[],label='Tags')
@@ -220,7 +225,7 @@ class gradio_ui(object):
         # chara_tags_delete = gr.Button(value='Delete tags')
 
         chara_tags_submit = gr.Button(value='Submit tags',variant='primary')
-        chara_selection = gr.Dropdown(label='Select Character')
+        chara_selection = gr.Dropdown(label='Select Character',choices=['None'],value='None')
 
         #settings tab
         dd_threshold = gr.Slider(minimum=0,maximum=1,value=self.d.threshold,step=0.01,interactive=True)
@@ -289,7 +294,7 @@ class gradio_ui(object):
                 dd_threshold.render()
 
             chara_img.change(fn=self.infer_chara,inputs=chara_img,outputs=chara_tags)
-            chara_selection.change(fn=self.switch_chara,inputs = chara_selection,outputs=[chara_img,chara_name,chara_tags])
+            chara_selection.change(fn=self.switch_chara,inputs = [chara_img,chara_name,chara_tags,chara_selection],outputs=[chara_img,chara_name,chara_tags])
             chara_add_tag.submit(fn=self.add_tag_chara,inputs=[chara_add_tag,chara_tags],outputs=[chara_add_tag,chara_tags])
             # chara_tags_delete.click(fn=self.delete_chara_tags,inputs=chara_tags,outputs=chara_tags)
             chara_tags_submit.click(fn=self.save_chara,inputs = [chara_img,chara_name,chara_tags], outputs=[chara_img,chara_name,chara_tags,chara_selection])

@@ -37,7 +37,7 @@ class Segmentor(object):
         self.cfg = cfg
         self.predictor = DefaultPredictor(cfg)
         self.d = DeepDanbooru()
-        self.mask_threshold = 0.4
+        self.mask_threshold = 0.6
     def __call__(self,img):
         # takes in opencv image, return a dict
         return self.predictor(img)
