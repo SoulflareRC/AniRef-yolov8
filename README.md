@@ -1,2 +1,2 @@
 # OPENMI-TEAM-4-Project
-Envisioned to be target detection project
+Extracts figure reference images from anime using YOLOv8
