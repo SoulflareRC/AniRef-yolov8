@@ -23,6 +23,7 @@ def clean_tags(tags:set,tags_in:set)->list:
     # clean tags in dataset,only use the intersection of tags and tags_in
     return list(tags.intersection(tags_in))
 
+
 def make_dataset_synthesis(dataset_dir,output_dir):
     '''
     make dataset from generated images
@@ -64,8 +65,6 @@ def make_dataset_synthesis(dataset_dir,output_dir):
             print(info)
             insert_row(sqldb.resolve(), info)
             idx+=1
-
-
 def make_dataset(dataset_dir,output_dir,score_threshold = 0):
     '''
     1.jpg
@@ -159,13 +158,13 @@ def insert_row(name:str,values:list):
     db.close()
 
 
-# dataset_dir = r"D:\pycharmWorkspace\DeepDanbooru\test\grabber"
-# output_dir = r"D:\pycharmWorkspace\DeepDanbooru\test\testDataset"
-# make_dataset(dataset_dir,output_dir)
-
-dataset_dir_synthesis = r"D:\pycharmWorkspace\flaskProj\sample-syn-data"
-img_path = r"D:\stable-diffusion-webui\sd-scripts\models\rkrk12\rkrk12\examples\63626-3453064932-1girl, solo, cute girl,soles,toes,barefoot, feet,(spread legs_1.1),feet apart,off shoulder, short skirt,navel,underwear,masterpi.png"
-img = Image.open(img_path)
-print(img.info['parameters'])
-output_dir_synthesis = r"D:\pycharmWorkspace\flaskProj\sample-syn-data\dataset"
-make_dataset_synthesis(dataset_dir_synthesis,output_dir_synthesis)
+dataset_dir = r"D:\DEMO\DeepDanbooru\what\grabber"
+output_dir = r"D:\DEMO\DeepDanbooru\what\dataset"
+make_dataset(dataset_dir,output_dir)
+#
+# dataset_dir_synthesis = r"D:\pycharmWorkspace\flaskProj\sample-syn-data"
+# img_path = r"D:\stable-diffusion-webui\sd-scripts\models\rkrk12\rkrk12\examples\63626-3453064932-1girl, solo, cute girl,soles,toes,barefoot, feet,(spread legs_1.1),feet apart,off shoulder, short skirt,navel,underwear,masterpi.png"
+# img = Image.open(img_path)
+# print(img.info['parameters'])
+# output_dir_synthesis = r"D:\pycharmWorkspace\flaskProj\sample-syn-data\dataset"
+# make_dataset_synthesis(dataset_dir_synthesis,output_dir_synthesis)

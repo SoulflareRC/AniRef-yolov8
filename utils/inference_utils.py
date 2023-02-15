@@ -28,7 +28,7 @@ def cv_to_pil(img:np.ndarray):
     return Image.fromarray(img)
 # wrapper class for utils
 class Segmentor(object):
-    def __init__(self,config_file,model_file):
+    def __init__(self,config_file="utils/configs/CondInst/CondInst-AnimeSeg.yaml",model_file="utils/models/CondInst-AnimeSeg.pth"):
         cfg = get_cfg()
         # load config from config file
         cfg.merge_from_file(config_file)

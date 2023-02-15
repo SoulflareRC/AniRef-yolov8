@@ -47,6 +47,13 @@ class Tagger(object):
         print(d1)
         print(d2)
         terms = set(d1).union(d2)
+        '''
+        d1:red,green 
+        d2:blue,red 
+        union: {red,green,blue}
+        {1,1,0}
+        {1,0,1}
+        '''
         print(terms)
         dotprod = sum( d1.get(k,0.0) * d2.get(k,0.0) for k in terms  )
         magA = math.sqrt(sum(d1.get(k, 0)**2 for k in terms))

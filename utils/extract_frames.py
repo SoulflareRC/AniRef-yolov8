@@ -12,11 +12,11 @@ from skimage.metrics import structural_similarity as ssim
 from deepdanbooru_onnx import DeepDanbooru,process_image
 from moviepy.video.io.ffmpeg_tools import *
 from .inference_utils import Segmentor
-
+from tqdm import tqdm
 class Extractor(object):
     def __init__(self,video,output_dir):
-        #will hold an object of segmentor
-        self.s = Segmentor(config_file="utils/configs/CondInst/CondInst-AnimeSeg.yaml",model_file="utils/models/CondInst-AnimeSeg.pth")
+        #will not hold an object of segmentor anymore
+        # self.s = Segmentor(config_file="utils/configs/CondInst/CondInst-AnimeSeg.yaml",model_file="utils/models/CondInst-AnimeSeg.pth")
         self._video = video
         # self.vid  = cv2.VideoCapture(video)
         self.output_dir = output_dir
@@ -113,95 +113,116 @@ class Extractor(object):
 
 
         return frames
-    def extract_refs(self,frames):
-        # frames = self.extract_scene(start_frameCnt)
+    # def extract_refs(self,frames):
+    #     # frames = self.extract_scene(start_frameCnt)
+    #     '''
+    #     Segmentation+add bounding box
+    #     '''
+    #     # dir = "refs"
+    #     # if not os.path.exists(dir):
+    #     #     os.makedirs(dir)
+    #     start = time.time()
+    #     self.s.mask_threshold = 0.6
+    #     print("Start!")
+    #     cnt = 0
+    #     for frame in frames:
+    #         print(frame.img.shape)
+    #         instances = self.s(frame.img)['instances']
+    #         instances:detectron2.structures.Instances
+    #         pred_dict = instances.get_fields()
+    #         # print(pred_dict)
+    #         boxes = self.s.get_boxes(pred_dict)
+    #         cropped = self.s.crop_boxes(frame.img,boxes)
+    #         for idx,c in enumerate(cropped):
+    #             # cv2.imshow(f"{cnt}",c)
+    #             cv2.imwrite( os.path.join(self.output_dir,f"{cnt} {boxes[idx][0]}.jpg"),c)
+    #             cnt+=1
+    #         # cv2.waitKey(-1)
+    #     end = time.time()
+    #     print(f"Extracting reference images took {end-start} seconds!")
+    #     return frames
+    def extract_frames_ssim(self,threshold = 0.4):
         '''
-        Segmentation+add bounding box
+        extract keyframes by ssim using self.video, return a list of cv2 images
         '''
-        # dir = "refs"
-        # if not os.path.exists(dir):
-        #     os.makedirs(dir)
-        start = time.time()
-        self.s.mask_threshold = 0.6
-        print("Start!")
-        cnt = 0
-        for frame in frames:
-            print(frame.img.shape)
-            instances = self.s(frame.img)['instances']
-            instances:detectron2.structures.Instances
-            pred_dict = instances.get_fields()
-            # print(pred_dict)
-            boxes = self.s.get_boxes(pred_dict)
-            cropped = self.s.crop_boxes(frame.img,boxes)
-            for idx,c in enumerate(cropped):
-                # cv2.imshow(f"{cnt}",c)
-                cv2.imwrite( os.path.join(self.output_dir,f"{cnt} {boxes[idx][0]}.jpg"),c)
-                cnt+=1
-            # cv2.waitKey(-1)
-        end = time.time()
-        print(f"Extracting reference images took {end-start} seconds!")
-        return frames
-
-    def extract_refs_onestage(self,video,threshold=0.7):
-        #kinda slow, maybe should not use this method.
-        if not os.path.exists("refs"):
-            os.makedirs("refs",exist_ok=True)
-
-        cap = cv2.VideoCapture(video)
-        video_path = self.extract_clips(frameCnt1=1, frameCnt2=cap.get(cv2.CAP_PROP_FRAME_COUNT),frate=10)
-        # video_path = self.extract_clips(frameCnt1=1, frameCnt2=350, frate=10)
-        cap.release()
-        print("Start!")
-        cap = cv2.VideoCapture(video_path)
-        ret,frame = cap.read()
-        instances: detectron2.structures.Instances = self.s(frame)['instances']
-        pred_dict = instances.get_fields()
-        boxes = self.s.get_boxes(pred_dict)
-
-        cnt = 0
-        while ret:
+        cap = cv2.VideoCapture(self.video)
+        ret, frame = cap.read()
+        frames = []
+        total_frame_cnt =int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        for i in tqdm(range(total_frame_cnt)):
             gray = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
             ret, next_frame = cap.read()
             if not ret:
                 break
-            # # Convert the next frame to grayscale
             next_gray = cv2.cvtColor(next_frame, cv2.COLOR_BGR2GRAY)
-            #
-            # # Compute the frame difference between the current frame and the next frame
-            # print(gray.shape,next_gray.shape)
-            # frame_diff = cv2.absdiff(gray, next_gray)
-            #
-            # # Threshold the frame difference to detect changes
-            # frame_diff = cv2.threshold(frame_diff, threshold, 255, cv2.THRESH_BINARY)[1]
-            #
-            # # If the frame difference is above the threshold, run object detection on the next frame
-            # if cv2.countNonZero(frame_diff) > 0:
-            sim = ssim(gray,next_gray)
-            print(sim)
-            if sim<threshold:
-                instances: detectron2.structures.Instances = self.s(frame)['instances']
-                pred_dict = instances.get_fields()
-                boxes = self.s.get_boxes(pred_dict)
-                cropped = self.s.crop_boxes(frame,boxes)
-                for idx,crop in enumerate(cropped):
-
-                    cv2.imwrite(os.path.join("refs",f"Frame{cap.get(cv2.CAP_PROP_POS_FRAMES)} {idx} {cnt}.jpg"),crop)
-                    # cv2.imshow(f"Frame{cap.get(cv2.CAP_PROP_POS_FRAMES)} {cnt}",crop)
-                #     cnt+=1
-
-                # cv2.waitKey(-1)
-
-            # If the object is detected in the next frame, add it to the list of object frames
-            # if bbox is not None:
-            #     object_frames.append(next_frame)
-
-            # Update the current frame
+            similarity = ssim(gray,next_gray)
+            if similarity<threshold:
+                frames.append(frame)
             frame = next_frame
-
-            # Release the video capture object
         cap.release()
+        print("Done extracing frames by ssim")
+        return frames
 
-        # return object_frames
+    # def extract_refs_onestage(self,video,threshold=0.7):
+    #     #kinda slow, maybe should not use this method.
+    #     if not os.path.exists("refs"):
+    #         os.makedirs("refs",exist_ok=True)
+    #
+    #     cap = cv2.VideoCapture(video)
+    #     video_path = self.extract_clips(frameCnt1=1, frameCnt2=cap.get(cv2.CAP_PROP_FRAME_COUNT),frate=10)
+    #     # video_path = self.extract_clips(frameCnt1=1, frameCnt2=350, frate=10)
+    #     cap.release()
+    #     print("Start!")
+    #     cap = cv2.VideoCapture(video_path)
+    #     ret,frame = cap.read()
+    #     instances: detectron2.structures.Instances = self.s(frame)['instances']
+    #     pred_dict = instances.get_fields()
+    #     boxes = self.s.get_boxes(pred_dict)
+    #
+    #     cnt = 0
+    #     while ret:
+    #         gray = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
+    #         ret, next_frame = cap.read()
+    #         if not ret:
+    #             break
+    #         # # Convert the next frame to grayscale
+    #         next_gray = cv2.cvtColor(next_frame, cv2.COLOR_BGR2GRAY)
+    #         #
+    #         # # Compute the frame difference between the current frame and the next frame
+    #         # print(gray.shape,next_gray.shape)
+    #         # frame_diff = cv2.absdiff(gray, next_gray)
+    #         #
+    #         # # Threshold the frame difference to detect changes
+    #         # frame_diff = cv2.threshold(frame_diff, threshold, 255, cv2.THRESH_BINARY)[1]
+    #         #
+    #         # # If the frame difference is above the threshold, run object detection on the next frame
+    #         # if cv2.countNonZero(frame_diff) > 0:
+    #         sim = ssim(gray,next_gray)
+    #         print(sim)
+    #         if sim<threshold:
+    #             instances: detectron2.structures.Instances = self.s(frame)['instances']
+    #             pred_dict = instances.get_fields()
+    #             boxes = self.s.get_boxes(pred_dict)
+    #             cropped = self.s.crop_boxes(frame,boxes)
+    #             for idx,crop in enumerate(cropped):
+    #
+    #                 cv2.imwrite(os.path.join("refs",f"Frame{cap.get(cv2.CAP_PROP_POS_FRAMES)} {idx} {cnt}.jpg"),crop)
+    #                 # cv2.imshow(f"Frame{cap.get(cv2.CAP_PROP_POS_FRAMES)} {cnt}",crop)
+    #             #     cnt+=1
+    #
+    #             # cv2.waitKey(-1)
+    #
+    #         # If the object is detected in the next frame, add it to the list of object frames
+    #         # if bbox is not None:
+    #         #     object_frames.append(next_frame)
+    #
+    #         # Update the current frame
+    #         frame = next_frame
+    #
+    #         # Release the video capture object
+    #     cap.release()
+    #
+    #     # return object_frames
     def remove_similar(self,imgs):
         #takes in a list of imgs
         pass
