@@ -5,6 +5,7 @@ import pathlib
 from pathlib import Path
 import cv2
 import detectron2.structures
+import numpy as np
 from PIL import Image
 import time
 import moviepy
@@ -15,20 +16,15 @@ from .inference_utils import Segmentor
 from tqdm import tqdm
 class Extractor(object):
     def __init__(self,video,output_dir):
-        #will not hold an object of segmentor anymore
-        # self.s = Segmentor(config_file="utils/configs/CondInst/CondInst-AnimeSeg.yaml",model_file="utils/models/CondInst-AnimeSeg.pth")
+        '''
+        :param video: video to keep track of
+        :param output_dir:
+        '''
         self._video = video
         # self.vid  = cv2.VideoCapture(video)
         self.output_dir = output_dir
         self.frames = []
-    # @property
-    # def video(self):
-    #     return self._video
-    # @video.setter
-    # def video(self,val):
-    #     self._video = val
-    #     self.vid = cv2.VideoCapture(val)
-    def collect_frames(self):
+    def collect_frames(self)->np.ndarray:
         '''
 
         :return: a list of cv2 images(BGR)
@@ -66,6 +62,14 @@ class Extractor(object):
         cmd = f"""ffmpeg -i {self.video} -vf "select='eq(pict_type,{type})'" -vsync vfr -frame_pts true {self.output_dir}/%d.jpg"""
         subprocess.run(cmd)
         return self.collect_frames()
+    def adjust_framerate(self,frate=30):
+        vid_path = Path(self.video)
+        vid_name = vid_path.stem
+        vid_ext = vid_path.suffix
+        cmd = f"""ffmpeg -y -i {self.video}  -filter:v fps={frate}  {self.output_dir}/{vid_name}{vid_ext}"""
+        subprocess.run(cmd)
+        # return f'{self.output_dir}/{vid_name}{vid_ext}'
+        return Path(self.output_dir).joinpath(vid_path.name)
     def extract_clips(self,frameCnt1,frameCnt2,frate=None):
         # if os.path.exists(self.output_dir):
         #     shutil.rmtree(self.output_dir)
@@ -77,7 +81,6 @@ class Extractor(object):
         frame_rate = vid.get(cv2.CAP_PROP_FPS)
         frame_cnt = vid.get(cv2.CAP_PROP_FRAME_COUNT)
         vid.release()#this has to be closed
-
         print(frame_rate)
         timestamp1 = frameCnt1/frame_rate
         timestamp2 = frameCnt2/frame_rate
@@ -223,6 +226,17 @@ class Extractor(object):
     #     cap.release()
     #
     #     # return object_frames
+    def extract_audio(self,video_path:Path):
+        target_audio_path = video_path.parent.joinpath(video_path.stem+".mp3")
+        subprocess.run(f"ffmpeg -i {video_path.resolve()} -vn -f mp3 {target_audio_path}")
+        return target_audio_path
+    def merge_video_audio(self,video_path:Path,audio_path:Path):
+        target_video_path = video_path.parent.joinpath(video_path.stem+"_merged"+video_path.suffix)
+        subprocess.run(f"ffmpeg \
+                        -i {video_path.resolve()} -i {audio_path.resolve()} \
+                        -c:v copy \
+                        -map 0:v -map 1:a \
+                        -y {target_video_path.resolve()} ")
     def remove_similar(self,imgs):
         #takes in a list of imgs
         pass

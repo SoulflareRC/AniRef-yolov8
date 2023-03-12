@@ -11,13 +11,49 @@ import os
 import shutil
 import pathlib
 
-def get_boxes(pred:list[Results])->list[Boxes]:
+def get_boxes(pred:list[Results],conf_threshold=0.0)->list[Boxes]:
     ret = []
     for res in pred:
         boxes = res.boxes
         for box in boxes:
-            ret.append(box)
+            if box.conf>conf_threshold:
+                ret.append(box)
     return ret
+def pad_boxes(img:np.ndarray,boxes:list[Boxes],scale=0.1)->list[Boxes]:
+    if scale==0:
+        return boxes
+    res = []
+    for box in boxes:
+        conf = float(box.conf)
+        cls = float(box.cls)
+        box = box.xyxy[0]
+        box = [int(x) for x in box]
+        h,w,c = img.shape
+        x1,y1,x2,y2 = box
+        print(x1,y1,x2,y2)
+        center_x = (x1+x2)/2
+        center_y = (y1+y2)/2
+        box_h_half = abs(y2-center_y)
+        box_w_half = abs(x2-center_x)
+        x3,y3,x4,y4 = x1-box_w_half*scale,y1-box_h_half*scale,x2+box_w_half*scale,y2+box_h_half*scale
+        x3 = max(0,x3)
+        y3 = max(0,y3)
+        x4 = min(w,x4)
+        y4 = min(h,y4)
+        print(x3,y3,x4,y4)
+        nums = np.asarray([x3,y3,x4,y4,conf,cls])
+        box = Boxes(boxes=np.asarray(nums),orig_shape=img.shape)
+        res.append(box)
+    return res
+def crop_boxes(img:np.ndarray,boxes:list[Boxes])->list[np.ndarray]:
+    res = []
+    for box in boxes:
+        box = box.xyxy[0]
+        box = [int(x) for x in box]
+        x1,y1,x2,y2 = box
+        cropped = img[y1:y2,x1:x2]
+        res.append(cropped)
+    return res
 def draw_boxes(img:np.ndarray,boxes:list[Boxes],color = (0,0,255)):
     '''
     boxes: list of Boxes
@@ -28,6 +64,15 @@ def draw_boxes(img:np.ndarray,boxes:list[Boxes],color = (0,0,255)):
         pt1,pt2 = ( int(box[0]),int(box[1]) ), ( int(box[2]),int(box[3]) )
         cv2.rectangle(res,pt1,pt2,color,2)
     return res
+def highlight_box(img:np.ndarray,boxes:list[Boxes]):
+    dark =  cv2.convertScaleAbs(img,alpha=0.6)
+    for box in boxes:
+        box = box.xyxy[0]
+        box = [int(x) for x in box]
+        x1,y1,x2,y2 = box
+        cropped = img[y1:y2,x1:x2]
+        dark[y1:y2,x1:x2]=cropped
+    return dark
 def draw_boxes_from_dataset(img:np.ndarray,boxes:list[Boxes],color = (0,0,255)):
     res = img.copy()
     hh,ww,cc = img.shape

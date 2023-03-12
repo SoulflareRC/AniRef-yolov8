@@ -9,7 +9,7 @@ from detectron2.structures.instances import Instances
 from dataset import  *
 
 e = Extractor(None,output_dir="temp")
-e.video = "test.mp4"
+e.video = "videos/"
 '''
 Use CondInst to make dataset
 '''
@@ -19,7 +19,7 @@ s.mask_threshold = 0.6 #set higher mask threshold to prevent false positive
 frames:list[Frame]=e.extract_keyframes(0.15) # extract frames by difference of 0.15
 imgs = [f.img for f in frames]
 imgs,boxes_list = condinst_list_to_imgboxes(s,imgs)
-output_dir = "test"
+output_dir = "test_dataset"
 make_dataset(imgs,boxes_list,output_dir)
 # visualize result
 for i in range(5):
