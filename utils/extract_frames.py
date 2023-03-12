@@ -12,7 +12,6 @@ import moviepy
 from skimage.metrics import structural_similarity as ssim
 from deepdanbooru_onnx import DeepDanbooru,process_image
 from moviepy.video.io.ffmpeg_tools import *
-from .inference_utils import Segmentor
 from tqdm import tqdm
 class Extractor(object):
     def __init__(self,video,output_dir):
