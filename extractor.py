@@ -60,7 +60,7 @@ class RefExtractor(object):
         for model in models:
             print(model)
         return models
-    def extract_chara(self,video_path,output_format="imgs",mode="crop",frame_diff_threshold = 0.2,padding=0.0)->Path:
+    def extract_chara(self,video_path,output_format="imgs",mode="crop",frame_diff_threshold = 0.2,padding=0.0,conf_threshold=0.0)->Path:
         '''
         :param video_path: path to
         :param output_format:
@@ -87,7 +87,7 @@ class RefExtractor(object):
                 for frame in tqdm(keyframes):
                     frame = frame.img
                     res:list[Results] = self.model.predict(frame)
-                    boxes = get_boxes(res)
+                    boxes = get_boxes(res,conf_threshold)
                     pad_boxes(frame,boxes,scale=padding)
                     if mode=="crop":
                         res_imgs = crop_boxes(frame,boxes)

@@ -60,28 +60,40 @@ class gradio_ui(object):
         return gr.Textbox.update(value="Successfully classified characters!")
     def view_last_folder(self):
         subprocess.Popen(f"explorer {self.last_folder.resolve()}")
-    def extract_ref(self,format,mode,model_name,video_path,threshold,padding):
+    def extract_ref(self,format,mode,model_name,video_path,threshold,padding,conf_threshold):
         if model_name not in self.refextractor.model_path.__str__():
             self.refextractor.model = None
             self.refextractor.model_path = Path("models/yolov8").joinpath(model_name+".pt" if ".pt" not in model_name else model_name)
         print(f"Extracting reference in {format} format, {mode} mode")
         if format=="imgs":
 
-            res_folder_path = self.refextractor.extract_chara(video_path=video_path,output_format=format,mode=mode,frame_diff_threshold=threshold,padding=padding)
+            res_folder_path = self.refextractor.extract_chara(video_path=video_path,output_format=format,mode=mode,frame_diff_threshold=threshold,padding=padding,conf_threshold=conf_threshold)
             res_imgs_paths = list(res_folder_path.iterdir())
             print(res_imgs_paths)
             self.last_folder = res_folder_path
             return gr.Gallery.update(value=[x.resolve().__str__() for x in res_imgs_paths],visible=True),\
                     gr.Video.update(visible=False),\
-                    gr.Button(visible=True,interactive=True)
+                    gr.Button.update(visible=True,interactive=True),\
+                    gr.Button.update(visible=True,interactive=True)
         elif format=="video":
-            res_video_path = self.refextractor.extract_chara(video_path=video_path,output_format=format,mode=mode,frame_diff_threshold=threshold,padding=padding)
+            res_video_path = self.refextractor.extract_chara(video_path=video_path.encode('unicode_escape').decode(),output_format=format,mode=mode,frame_diff_threshold=threshold,padding=padding,conf_threshold=conf_threshold)
             print(res_video_path)
             self.last_folder = res_video_path.parent
             return gr.Gallery.update(visible=False), \
                 gr.Video.update(value=res_video_path.resolve().__str__(), visible=True),\
-                    gr.Button(visible=True,interactive=True)
-        return gr.Gallery.update(),gr.Video.update(),gr.Button()
+                    gr.Button.update(visible=True,interactive=True),\
+                    gr.Button.update(visible=True,interactive=True)
+        return gr.Gallery.update(),gr.Video.update(),gr.Button().update(),gr.Button.update()
+    def change_tab(self):
+        print("Go to mark character tab")
+        return gr.Tabs.update(selected=1)#go to mark character tab
+    def mode_options(self,output_format):
+        if output_format=="video":
+            return gr.Radio.update(interactive=False)
+        elif output_format=="imgs":
+            return  gr.Radio.update(interactive=True)
+
+        return gr.Radio.update()
     def interface(self):
         output_format = gr.Radio(choices=["imgs","video"],
                                  value="imgs",
@@ -100,18 +112,20 @@ class gradio_ui(object):
                                       interactive=True)
         threshold_slider = gr.Slider(minimum=0.0,maximum=1.0,value=0.2,label="Keyframe Threshold",info="Larger value means fewer keyframe extracted for imgs mode",interactive=True)
         padding_slider = gr.Slider(minimum=-0.5,maximum=1.0,value=0.0,label="Detection Padding",info="Pad the detection boxes(optional)",interactive=True)
+        conf_threshold_slider = gr.Slider(minimum=0.0, maximum=1.0, value=0.0, label="Detection Confidence Threshold",
+                                     info="How confident the detection result has to be to be considered.", interactive=True)
 
         vid_upload = gr.Video(label="Upload your video!")
         vid_submit = gr.Button(value="Submit video!",variant="primary")
-        # test_btn = gr.Button(value="Test")
+        test_btn = gr.Button(value="Test")
 
         res_imgs = gr.Gallery(label="Result",visible=False,interactive=False)
         res_imgs.style(grid=6,container=True)
 
         res_vid = gr.Video(label="Result",visible=False,interactive=False)
 
-        res_view_btn = gr.Button(value="View it in your folder 🗀",visible=False,interactive=True)
-
+        res_view_btn = gr.Button(value="View it in your folder 🗀",visible=True,interactive=True)
+        res_send_to_mark_btn = gr.Button(value="Send to mark character",visible=True,interactive=False)
         # mark character part
         mark_use_last_folder_btn =gr.Button(value="Read last result",interactive=True)
         mark_folder_upload = gr.File(label="Upload dataset",
@@ -129,6 +143,7 @@ class gradio_ui(object):
                                                     info="How similar the image has to be to be considered as a character.",
                                                     interactive=True
                                                     )
+
         mark_btn = gr.Button(value="Start marking!",variant="primary",interactive=True)
         mark_message = gr.Textbox(interactive=False,label="Message")
         # character manipulation
@@ -145,42 +160,50 @@ class gradio_ui(object):
         mark_chara_submit = gr.Button(value="Save Character",variant="primary",interactive=True)
 
         with gr.Blocks(title="AniRef") as demo:
-            with gr.Tab("Inference"):
-                with gr.Row(variant="compact"):
-                    output_format.render()
-                    output_mode.render()
-                    model_selection.render()
-                with gr.Row():
-                    with gr.Accordion(label="Advanced",open=False):
-                        threshold_slider.render()
-                        padding_slider.render()
-                with gr.Row():
-                    vid_upload.render()
-                with gr.Row():
-                    vid_submit.render()
-                    # test_btn.render()
-                with gr.Row():
-                    # with gr.Row():
-                    res_imgs.render()
-                    res_vid.render()
-                    res_view_btn.render()
-            with gr.Tab("Mark Characters") as mark_tab:
-                with gr.Row():
-                    with gr.Column(scale=3):
-                        mark_use_last_folder_btn.render()
-                        mark_chara_target_selection.render()
-                        mark_chara_similarity_threshold.render()
-                        mark_folder_upload.render()
-                        mark_btn.render()
-                        mark_message.render()
-                    with gr.Column(scale=1):
-                        mark_chara_selection.render()
-                        mark_chara_img.render()
-                        mark_chara_tags.render()
-                        mark_chara_name.render()
-                        mark_chara_submit.render()
-            vid_submit.click(fn=self.extract_ref,inputs=[output_format,output_mode,model_selection,vid_upload,threshold_slider,padding_slider],outputs=[res_imgs,res_vid,res_view_btn])
-            # test_btn.click(fn=tab_hist.select)
+            with gr.Tabs() as tabs:
+                with gr.TabItem("Inference",id=0):
+                    with gr.Row(variant="compact"):
+                        output_format.render()
+                        output_mode.render()
+                        model_selection.render()
+                    with gr.Row():
+                        with gr.Accordion(label="Advanced",open=False):
+                            conf_threshold_slider.render()
+                            threshold_slider.render()
+                            padding_slider.render()
+                    with gr.Row():
+                        vid_upload.render()
+                    with gr.Row():
+                        vid_submit.render()
+                        # test_btn.render()
+                    with gr.Row():
+                        with gr.Column():
+                        # with gr.Row():
+                            with gr.Row():
+                                res_imgs.render()
+                            with gr.Row():
+                                res_vid.render()
+                            with gr.Row():
+                                res_view_btn.render()
+                                res_send_to_mark_btn.render()
+                with gr.TabItem("Mark Characters",id=1):
+                    with gr.Row():
+                        with gr.Column(scale=3):
+                            mark_use_last_folder_btn.render()
+                            mark_chara_target_selection.render()
+                            mark_chara_similarity_threshold.render()
+                            mark_folder_upload.render()
+                            mark_btn.render()
+                            mark_message.render()
+                        with gr.Column(scale=1):
+                            mark_chara_selection.render()
+                            mark_chara_img.render()
+                            mark_chara_tags.render()
+                            mark_chara_name.render()
+                            mark_chara_submit.render()
+            output_format.change(fn=self.mode_options,inputs=output_format,outputs=output_mode)
+            vid_submit.click(fn=self.extract_ref,inputs=[output_format,output_mode,model_selection,vid_upload,threshold_slider,padding_slider,conf_threshold_slider],outputs=[res_imgs,res_vid,res_view_btn,res_send_to_mark_btn])
+            test_btn.click(fn=self.change_tab,inputs=None,outputs=tabs)
             res_view_btn.click(fn=self.view_last_folder)
 
             # character marking stuff
@@ -189,6 +212,7 @@ class gradio_ui(object):
             mark_chara_selection.change(fn=self.switch_chara,inputs=mark_chara_selection,outputs=mark_chara_tags)
 
             mark_btn.click(fn=self.mark_chara,inputs=[mark_folder_upload,mark_chara_target_selection,mark_chara_similarity_threshold],outputs=mark_message)
+
         demo.launch(debug=True)
 ui = gradio_ui()
 ui.interface()

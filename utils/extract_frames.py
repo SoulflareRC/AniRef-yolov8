@@ -47,7 +47,7 @@ class Extractor(object):
         # if os.path.exists(self.output_dir):
         #     shutil.rmtree(self.output_dir)
         os.makedirs(self.output_dir,exist_ok=True)
-        cmd = f"""ffmpeg -i {self.video} -vf "select='gt(scene,{threshold})'" -vsync vfr -frame_pts true {self.output_dir}/%d.jpg"""
+        cmd = f"""ffmpeg -y -i "{self.video}" -vf "select='gt(scene,{threshold})'" -vsync vfr -frame_pts true "{self.output_dir}/%d.jpg" """
         subprocess.run(cmd)
         end = time.time()
         print(f"Extracting keyframes with threshold {threshold} took {end-start} seconds!")
@@ -58,14 +58,14 @@ class Extractor(object):
         '''
 
         os.makedirs(self.output_dir,exist_ok=True)
-        cmd = f"""ffmpeg -i {self.video} -vf "select='eq(pict_type,{type})'" -vsync vfr -frame_pts true {self.output_dir}/%d.jpg"""
+        cmd = f"""ffmpeg -y -i "{self.video}" -vf "select='eq(pict_type,{type})'" -vsync vfr -frame_pts true "{self.output_dir}/%d.jpg" """
         subprocess.run(cmd)
         return self.collect_frames()
     def adjust_framerate(self,frate=30):
         vid_path = Path(self.video)
         vid_name = vid_path.stem
         vid_ext = vid_path.suffix
-        cmd = f"""ffmpeg -y -i {self.video}  -filter:v fps={frate}  {self.output_dir}/{vid_name}{vid_ext}"""
+        cmd = f"""ffmpeg -y -i "{self.video}"  -filter:v fps={frate}  "{self.output_dir}/{vid_name}{vid_ext}" """
         subprocess.run(cmd)
         # return f'{self.output_dir}/{vid_name}{vid_ext}'
         return Path(self.output_dir).joinpath(vid_path.name)
@@ -87,7 +87,7 @@ class Extractor(object):
         vid_name = vid_path.stem
         vid_ext = vid_path.suffix
         #     -c:v copy -c:a copy
-        cmd = f"""ffmpeg -y -i {self.video} -ss {timestamp1} -to {timestamp2} -filter:v fps={frate}  {self.output_dir}/{vid_name}{frameCnt1}-{frameCnt2}{vid_ext}"""
+        cmd = f"""ffmpeg -y -i "{self.video}" -ss {timestamp1} -to {timestamp2} -filter:v fps={frate}  "{self.output_dir}/{vid_name}{frameCnt1}-{frameCnt2}{vid_ext}" """
         subprocess.run(cmd)
         return f'{self.output_dir}/{vid_name}{frameCnt1}-{frameCnt2}{vid_ext}'
     def extract_scene(self,start_frameCnt):
@@ -227,15 +227,20 @@ class Extractor(object):
     #     # return object_frames
     def extract_audio(self,video_path:Path):
         target_audio_path = video_path.parent.joinpath(video_path.stem+".mp3")
-        subprocess.run(f"ffmpeg -i {video_path.resolve()} -vn -f mp3 {target_audio_path}")
+        cmd=f"""ffmpeg -y -i  "{video_path.resolve()}" -vn -f mp3 "{target_audio_path}" """
+        subprocess.run(cmd)
         return target_audio_path
     def merge_video_audio(self,video_path:Path,audio_path:Path):
         target_video_path = video_path.parent.joinpath(video_path.stem+"_merged"+video_path.suffix)
-        subprocess.run(f"ffmpeg \
-                        -i {video_path.resolve()} -i {audio_path.resolve()} \
+        print(f"Merging {video_path} and {audio_path} into {target_video_path}")
+        cmd=f"""ffmpeg -y \
+                        -i "{video_path.resolve()}" -i "{audio_path.resolve()}" \
                         -c:v copy \
                         -map 0:v -map 1:a \
-                        -y {target_video_path.resolve()} ")
+                        -y "{target_video_path.resolve()}" """
+        subprocess.run(cmd)
+
+        return target_video_path.resolve()
     def remove_similar(self,imgs):
         #takes in a list of imgs
         pass
