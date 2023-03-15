@@ -257,7 +257,7 @@ class gradio_ui(object):
 
             mark_btn.click(fn=self.mark_chara,inputs=[mark_folder_upload,mark_chara_target_selection,mark_chara_similarity_threshold],outputs=[mark_message,mark_chara_res_gallery])
 
-        demo.launch(debug=True)
+        demo.launch(debug=True,share=True)
 if __name__ == "__main__":
     ui = gradio_ui()
     ui.interface()
