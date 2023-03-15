@@ -4,14 +4,11 @@ import os
 import pathlib
 from pathlib import Path
 import cv2
-import detectron2.structures
 import numpy as np
 from PIL import Image
 import time
-import moviepy
 from skimage.metrics import structural_similarity as ssim
 from deepdanbooru_onnx import DeepDanbooru,process_image
-from moviepy.video.io.ffmpeg_tools import *
 from tqdm import tqdm
 class Extractor(object):
     def __init__(self,video,output_dir):
