@@ -53,13 +53,15 @@ class Tagger(object):
                 toi.add(tag)
         print(f"Grabbed {len(toi)} tags of interest")
         return toi
-    def tag_chara(self,img:np.ndarray):
+    def tag_chara(self,img):
         '''
         :param img: will be a cv2 image for compatibility, but needs to be converted into PIL image since deepdanbooru works with PIL Images
         :return: predicted tags from toi
         '''
         if type(img)==np.ndarray:
-            img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
+            # gradio seems to be doing some internal convertion that converts the image to RGB first
+            # print(img.mode)
+            # img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
             img = Image.fromarray(img)
             # img.show("what")
         d = self(img)
@@ -187,6 +189,15 @@ class Tagger(object):
         '''
         tuples = sorted(list(zip(d.keys(), d.values())), key=lambda x: x[1],reverse=True)
         return tuples
+    def get_toi_from_dict(self,d:dict,toi:set):
+        '''
+        Takes in a dict and a set of tags of interest
+        get the dict entries with tags of interest
+        '''
+        intersection = d.keys()&toi
+
+        res_dict = {x:d[x] for x in intersection}
+        return res_dict
     def cos_sim(self,d1:dict,d2:dict):
         '''
         deprecated.

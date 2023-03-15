@@ -24,6 +24,7 @@ import hashlib
 import json
 import gdown
 from utils.lineart_converter import *
+from utils.superresolution import esrgan
 from utils.extract_frames import *
 from utils.tagger import Tagger
 from yolov8.dataset import *
@@ -134,7 +135,7 @@ class RefExtractor(object):
         if not target_folder.exists():
             os.makedirs(target_folder)
         target_path = target_folder.joinpath(img_path.name)
-        contour = createImage(img)
+        contour = extract_lineart(img)
         end = time.time()
         print("extracting line art used:",end-start," seconds")
         cv2.imwrite(target_path.resolve().__str__(),contour)
@@ -193,25 +194,42 @@ if __name__ == "__main__":
     # vid_path = r"D:\pycharmWorkspace\flaskProj\videos2\videoplayback(1).mp4"
     # r.extract_chara(vid_path,output_format="imgs",padding=0.0)
 
-    ref_img = r"output/video_to_imgs/crop/videoplayback(1)/68.jpg"
-    ref_img = cv2.imread(ref_img)
-    tags = r.tagger. tag_chara(ref_img)
-    ref_img2 = cv2.imread(r"D:\pycharmWorkspace\OPENMI-TEAM-4-Project\output\video_to_imgs\crop\videoplayback(1)\3.jpg")
-    tags.union (r.tagger. tag_chara(ref_img2))
-    print(tags)
+    # ref_img = r"output/video_to_imgs/crop/videoplayback(1)/68.jpg"
+    # ref_img = cv2.imread(ref_img)
+    # tags = r.tagger. tag_chara(ref_img)
+    # ref_img2 = cv2.imread(r"D:\pycharmWorkspace\OPENMI-TEAM-4-Project\output\video_to_imgs\crop\videoplayback(1)\3.jpg")
+    # tags.union (r.tagger. tag_chara(ref_img2))
+    # print(tags)
     # cv2.imshow("ref", ref_img)
     # cv2.waitKey(-1)
     # r.charas["kuriyama"] = {
     #     "tags":tags
     # }
-    r.tagger.chara_tags["kuriyama"]=tags
+    # r.tagger.chara_tags["kuriyama"]=tags
     test_folder = Path(r"D:\pycharmWorkspace\OPENMI-TEAM-4-Project\output\video_to_imgs\crop\videoplayback(1)")
     # r.tagger.mark_chara_from_folder(test_folder,["kuriyama"])
     imgs = []
     for f in list(test_folder.iterdir()):
         if not f.is_dir():
             imgs.append(Image.open(f))
-    r.tagger.mark_chara_from_imgs(imgs,['kuriyama'],test_folder)
+    # get toi - pose/gesture/face
+    with open("tags_class.txt",'r') as f:
+        toi = set(f.read().splitlines())
+    print("TOI:",toi)
+    for img in imgs:
+        # img is PIL Image
+        img:Image
+        print(img.size)
+        img = img.resize((x*2 for x in img.size),Image.BOX)
+        r.tagger.d.threshold = 0.0
+        d = r.tagger(img)
+        d =  r.tagger.get_toi_from_dict(d,toi)
+        t = r.tagger.dict_to_tuples(d)
+        print(t)
+        img.show("Test")
+        # exit(0)
+    # r.tagger.mark_chara_from_imgs(imgs,['kuriyama'],test_folder)
+
     # img_paths = list(test_folder.iterdir())
     # for p in tqdm(img_paths):
     #     img_test = cv2.imread(p.resolve().__str__())

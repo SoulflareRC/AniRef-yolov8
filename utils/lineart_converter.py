@@ -25,7 +25,7 @@ def linearArt(filename, outPath):
 
 
 
-def createImage(img):
+def extract_lineart(img):
     kernel = np.ones((5,5), np.uint8)
     img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  #  grayscale
     blurred_img = cv2.GaussianBlur(img_gray, (5, 5), 0) # remove noise from image
@@ -52,7 +52,7 @@ def convert_images(dir_from, dir_to):
             print(file_name)
             img = cv2.imread(os.path.join(dir_from, file_name))
             # transform each image
-            img_contour = createImage(img)
+            img_contour = extract_lineart(img)
 
             res = file_name.split('.',1)[0]
             out_name = res + "out" + str(ctr) + ".jpg"

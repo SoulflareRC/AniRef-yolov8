@@ -10,10 +10,17 @@ import numpy as np
 from datetime import datetime
 from extractor import RefExtractor
 import subprocess
+import json
 class gradio_ui(object):
     def __init__(self):
         self.refextractor = RefExtractor()
-
+        charas_path = Path("characters.json")
+        if charas_path.exists():
+            with open(charas_path,'r') as f:
+                try:
+                    self.refextractor.tagger.chara_tags = json.load(f)
+                except:
+                    pass
         self.last_folder = Path("output")
     #character related
     def infer_chara(self,img:np.ndarray,existing_tags:list[str]):
@@ -34,9 +41,26 @@ class gradio_ui(object):
         :return: update dropdown value with chara_tags keys,clear
         '''
         self.refextractor.tagger.chara_tags[name]=tags
-        return gr.Dropdown.update(choices=list(self.refextractor.tagger.chara_tags.keys()),value=name,interactive=True),\
-                gr.CheckboxGroup.update(choices=list(self.refextractor.tagger.chara_tags.keys()),interactive=True)
+        with open("characters.json",'w') as f:
+            json.dump(self.refextractor.tagger.chara_tags,f)
 
+        return gr.Dropdown.update(choices=list(self.refextractor.tagger.chara_tags.keys()),value=name,interactive=True),\
+                gr.Radio.update(choices=list(self.refextractor.tagger.chara_tags.keys()),interactive=True)
+    def erase_chara(self,name:str):
+        '''
+
+        :param name: character name
+        :param tags: selected values of character tags
+        :return: update dropdown value with chara_tags keys,clear
+        '''
+        if name in self.refextractor.tagger.chara_tags.keys():
+            self.refextractor.tagger.chara_tags.pop(name)
+            print (self.refextractor.tagger.chara_tags)
+        with open("characters.json",'w') as f:
+            json.dump(self.refextractor.tagger.chara_tags,f,indent=True)
+
+        return gr.Dropdown.update(choices=list(self.refextractor.tagger.chara_tags.keys()),value=None,interactive=True),\
+                gr.Radio.update(choices=list(self.refextractor.tagger.chara_tags.keys()),interactive=True)
     def switch_chara(self, name):
         '''
 
@@ -48,7 +72,8 @@ class gradio_ui(object):
             return gr.CheckboxGroup.update(choices=[],value=[],interactive=True)
         tags = self.refextractor.tagger.chara_tags[name]
         return gr.CheckboxGroup.update(choices=tags,value=tags,interactive=True)
-    def mark_chara(self,files:list,target_charas:list[str],similarity_threshold):
+    # def mark_chara(self,files:list,target_charas:list[str],similarity_threshold):
+    def mark_chara(self, files: list, target_chara:str, similarity_threshold):
         # files will be a list of tempfile
         print("Starting marking characters!")
         imgs = []
@@ -56,10 +81,18 @@ class gradio_ui(object):
             imgs.append(Image.open(f.name))
         # self.refextractor.tagger.mark_chara(folder_path,target_charas,similarity_threshold)
         output_folder = Path("output").joinpath("mark_characters").joinpath(datetime.now().__str__().replace(":",""))
-        self.refextractor.tagger.mark_chara_from_imgs(imgs=imgs,charas=target_charas,output_folder=output_folder)
-        return gr.Textbox.update(value="Successfully classified characters!")
+        res_folders = self.refextractor.tagger.mark_chara_from_imgs(imgs=imgs,charas=[target_chara],output_folder=output_folder)
+        chara_folder:Path = res_folders[target_chara]
+
+        return gr.Textbox.update(value="Successfully classified characters!"),\
+            gr.Gallery.update(value=[f.resolve().__str__() for f in list(chara_folder.iterdir())],label=target_chara,visible=True)
     def view_last_folder(self):
         subprocess.Popen(f"explorer {self.last_folder.resolve()}")
+    def send_last_to_mark(self):
+        if self.last_folder.is_dir():
+            fs = list(self.last_folder.iterdir())
+            return gr.File.update(value=[f.resolve().__str__() for f in fs]), gr.Tabs.update(selected=1)
+        return gr.File.update(), gr.Tabs.update()
     def extract_ref(self,format,mode,model_name,video_path,threshold,padding,conf_threshold):
         if model_name not in self.refextractor.model_path.__str__():
             self.refextractor.model = None
@@ -131,9 +164,9 @@ class gradio_ui(object):
         mark_folder_upload = gr.File(label="Upload dataset",
                                      file_count="directory",
                                      info="Upload the folder with images you want to mark",
-                                     interactive=True
+                                     interactive=True,elem_id="mark-files"
                                      )
-        mark_chara_target_selection = gr.CheckboxGroup(choices=[],value=None,
+        mark_chara_target_selection = gr.Radio(choices=list(self.refextractor.tagger.chara_tags.keys()),value=None,
                                                        label="Target Characters",
                                                        info="Check the names of characters you want to mark in this dataset",
                                                        # interactive=True
@@ -143,11 +176,14 @@ class gradio_ui(object):
                                                     info="How similar the image has to be to be considered as a character.",
                                                     interactive=True
                                                     )
+        mark_chara_res_gallery = gr.Gallery(label="Result",visible=False)
+        mark_chara_res_gallery.style(grid=6,container=True)
 
         mark_btn = gr.Button(value="Start marking!",variant="primary",interactive=True)
         mark_message = gr.Textbox(interactive=False,label="Message")
         # character manipulation
         mark_chara_selection = gr.Dropdown(label="Character",
+                                           choices=list(self.refextractor.tagger.chara_tags.keys()),
                                            interactive=True)
         mark_chara_img = gr.Image(label='Character Reference Image',
                                   # tool="select",
@@ -158,6 +194,8 @@ class gradio_ui(object):
                                      info="If character name exists, this will update the character's tags",
                                      interactive=True)
         mark_chara_submit = gr.Button(value="Save Character",variant="primary",interactive=True)
+        mark_chara_erase  = gr.Button(value="Delete Character", interactive=True)
+        # post processing
 
         with gr.Blocks(title="AniRef") as demo:
             with gr.Tabs() as tabs:
@@ -192,27 +230,34 @@ class gradio_ui(object):
                             mark_use_last_folder_btn.render()
                             mark_chara_target_selection.render()
                             mark_chara_similarity_threshold.render()
-                            mark_folder_upload.render()
                             mark_btn.render()
                             mark_message.render()
+                            mark_chara_res_gallery.render()
+                            mark_folder_upload.render()
                         with gr.Column(scale=1):
                             mark_chara_selection.render()
                             mark_chara_img.render()
                             mark_chara_tags.render()
                             mark_chara_name.render()
                             mark_chara_submit.render()
+                            mark_chara_erase.render()
             output_format.change(fn=self.mode_options,inputs=output_format,outputs=output_mode)
             vid_submit.click(fn=self.extract_ref,inputs=[output_format,output_mode,model_selection,vid_upload,threshold_slider,padding_slider,conf_threshold_slider],outputs=[res_imgs,res_vid,res_view_btn,res_send_to_mark_btn])
-            test_btn.click(fn=self.change_tab,inputs=None,outputs=tabs)
+            # test_btn.click(fn=self.change_tab,inputs=None,outputs=tabs)
+            res_send_to_mark_btn.click(fn=self.send_last_to_mark, outputs=[mark_folder_upload, tabs])
             res_view_btn.click(fn=self.view_last_folder)
 
             # character marking stuff
+            mark_use_last_folder_btn.click(fn=self.send_last_to_mark,outputs=[mark_folder_upload,tabs])
             mark_chara_img.change(fn=self.infer_chara,inputs=[mark_chara_img,mark_chara_tags],outputs=[mark_chara_tags])
             mark_chara_submit.click(fn=self.save_chara,inputs=[mark_chara_name,mark_chara_tags],outputs=[mark_chara_selection,mark_chara_target_selection])
+            mark_chara_erase.click(fn=self.erase_chara, inputs=[mark_chara_selection],
+                                    outputs=[mark_chara_selection, mark_chara_target_selection])
             mark_chara_selection.change(fn=self.switch_chara,inputs=mark_chara_selection,outputs=mark_chara_tags)
 
-            mark_btn.click(fn=self.mark_chara,inputs=[mark_folder_upload,mark_chara_target_selection,mark_chara_similarity_threshold],outputs=mark_message)
+            mark_btn.click(fn=self.mark_chara,inputs=[mark_folder_upload,mark_chara_target_selection,mark_chara_similarity_threshold],outputs=[mark_message,mark_chara_res_gallery])
 
         demo.launch(debug=True)
-ui = gradio_ui()
-ui.interface()
+if __name__ == "__main__":
+    ui = gradio_ui()
+    ui.interface()
