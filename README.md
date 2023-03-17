@@ -1,4 +1,5 @@
 # AniRef-yolov8
+![akihito](https://user-images.githubusercontent.com/107384280/225947977-94856df1-dfb7-4eb8-a4a2-ce8edf72edaf.png)
 ### What does AniRef do?
 This project mainly presents a toolchain for artists to quickly extract reference images from anime videos. We first use an object detection model to crop out the characters, and then use [Deepdanbooru](https://github.com/KichangKim/DeepDanbooru) to tag a character on a subset of Danbooru Tags and then goes to identify the character in cropped out images based on the tags inferenced from a few reference images. 
 ### Model
