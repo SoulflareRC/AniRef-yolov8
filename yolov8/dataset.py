@@ -65,7 +65,7 @@ def draw_boxes(img:np.ndarray,boxes:list[Boxes],color = (0,0,255)):
         cv2.rectangle(res,pt1,pt2,color,2)
     return res
 def highlight_box(img:np.ndarray,boxes:list[Boxes]):
-    dark =  cv2.convertScaleAbs(img,alpha=0.6)
+    dark =  cv2.convertScaleAbs(img,alpha=0.4)
     for box in boxes:
         box = box.xyxy[0]
         box = [int(x) for x in box]

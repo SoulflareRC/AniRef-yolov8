@@ -38,7 +38,7 @@ def extract_lineart(img):
     # median blur to smooth the lines
     # median = cv2.medianBlur(closing, 5)
 
-    img_dilated = cv2.dilate(blurred_img, kernel, iterations=2) #raising the iterations help with darkness
+    img_dilated = cv2.dilate(blurred_img, kernel, iterations=5) #raising the iterations help with darkness
     img_diff = cv2.absdiff(img_dilated, img_gray) 
     contour = 255 - img_diff
     return contour

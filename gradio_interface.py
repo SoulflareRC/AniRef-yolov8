@@ -29,6 +29,8 @@ class gradio_ui(object):
         :param existing_tags:existing tags
         :return: update tags of a character
         '''
+        if img is None:
+            return gr.CheckboxGroup.update()
         tags:set =  self.refextractor.tagger.tag_chara(img)
         print("Existing tags:",existing_tags)
         final_tags =  list(tags.union(existing_tags))
@@ -94,6 +96,7 @@ class gradio_ui(object):
             return gr.File.update(value=[f.resolve().__str__() for f in fs]), gr.Tabs.update(selected=1)
         return gr.File.update(), gr.Tabs.update()
     def extract_ref(self,format,mode,model_name,video_path,threshold,padding,conf_threshold):
+        print(video_path)
         if model_name not in self.refextractor.model_path.__str__():
             self.refextractor.model = None
             self.refextractor.model_path = Path("models/yolov8").joinpath(model_name+".pt" if ".pt" not in model_name else model_name)
@@ -107,7 +110,8 @@ class gradio_ui(object):
             return gr.Gallery.update(value=[x.resolve().__str__() for x in res_imgs_paths],visible=True),\
                     gr.Video.update(visible=False),\
                     gr.Button.update(visible=True,interactive=True),\
-                    gr.Button.update(visible=True,interactive=True)
+                    gr.Button.update(visible=True,interactive=True),\
+                    gr.Textbox.update(value=f"Results saved in {res_folder_path.resolve()}")
         elif format=="video":
             res_video_path = self.refextractor.extract_chara(video_path=video_path.encode('unicode_escape').decode(),output_format=format,mode=mode,frame_diff_threshold=threshold,padding=padding,conf_threshold=conf_threshold)
             print(res_video_path)
@@ -115,8 +119,9 @@ class gradio_ui(object):
             return gr.Gallery.update(visible=False), \
                 gr.Video.update(value=res_video_path.resolve().__str__(), visible=True),\
                     gr.Button.update(visible=True,interactive=True),\
-                    gr.Button.update(visible=True,interactive=True)
-        return gr.Gallery.update(),gr.Video.update(),gr.Button().update(),gr.Button.update()
+                    gr.Button.update(visible=True,interactive=True), \
+                gr.Textbox.update(value=f"Result saved in {res_video_path.resolve()}")
+        return gr.Gallery.update(),gr.Video.update(),gr.Button().update(),gr.Button.update(),gr.Textbox.update(value="Failed to detect characters.")
     def change_tab(self):
         print("Go to mark character tab")
         return gr.Tabs.update(selected=1)#go to mark character tab
@@ -150,6 +155,7 @@ class gradio_ui(object):
 
         vid_upload = gr.Video(label="Upload your video!")
         vid_submit = gr.Button(value="Submit video!",variant="primary")
+        vid_message = gr.Textbox(interactive=False)
         test_btn = gr.Button(value="Test")
 
         res_imgs = gr.Gallery(label="Result",visible=False,interactive=False)
@@ -218,6 +224,8 @@ class gradio_ui(object):
                         with gr.Column():
                         # with gr.Row():
                             with gr.Row():
+                                vid_message.render()
+                            with gr.Row():
                                 res_imgs.render()
                             with gr.Row():
                                 res_vid.render()
@@ -241,8 +249,11 @@ class gradio_ui(object):
                             mark_chara_name.render()
                             mark_chara_submit.render()
                             mark_chara_erase.render()
+                with gr.TabItem("Postprocessing",id=2):
+                    with gr.Column():
+                        pass
             output_format.change(fn=self.mode_options,inputs=output_format,outputs=output_mode)
-            vid_submit.click(fn=self.extract_ref,inputs=[output_format,output_mode,model_selection,vid_upload,threshold_slider,padding_slider,conf_threshold_slider],outputs=[res_imgs,res_vid,res_view_btn,res_send_to_mark_btn])
+            vid_submit.click(fn=self.extract_ref,inputs=[output_format,output_mode,model_selection,vid_upload,threshold_slider,padding_slider,conf_threshold_slider],outputs=[res_imgs,res_vid,res_view_btn,res_send_to_mark_btn,vid_message])
             # test_btn.click(fn=self.change_tab,inputs=None,outputs=tabs)
             res_send_to_mark_btn.click(fn=self.send_last_to_mark, outputs=[mark_folder_upload, tabs])
             res_view_btn.click(fn=self.view_last_folder)
