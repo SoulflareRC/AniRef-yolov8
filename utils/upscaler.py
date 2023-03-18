@@ -45,6 +45,7 @@ class Upscaler(object):
             "-o",out_path if type(out_path)==str else out_path.resolve().__str__(),
             "-s",str(scale),
             "-n",model_name,
+            "-j","4:4:4"
         ]
         if verbose:
             cmd.append('-v')

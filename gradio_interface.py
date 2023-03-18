@@ -136,6 +136,9 @@ class gradio_ui(object):
 
     #postprocessing
     def make_grids(self,files:list,row,col,size,progress=gr.Progress()):
+        output_folder = Path("output").joinpath("postprocess").joinpath("grids") .joinpath(datetime.now().__str__().replace(":", ""))
+        if not output_folder.exists():
+            os.makedirs(output_folder)
         row = int(row)
         col = int(col)
         size = int(size)
@@ -150,32 +153,58 @@ class gradio_ui(object):
             img = self.refextractor.pad_image(img)
             img = cv2.resize(img,(size,size),cv2.INTER_CUBIC)
             imgs.append(img)
+
         group_size = row*col
         for i in range(0,len(imgs),group_size):
            chunk = imgs[i:min(i+group_size,len(imgs))]
-           grids.append(self.refextractor.make_grid(chunk,row,col))
+           grid = self.refextractor.make_grid(chunk,row,col)
+           cv2.imwrite(output_folder.joinpath(str(len(list(output_folder.iterdir()))) + ".jpg").resolve().__str__(),grid )
+           grids.append(grid)
+
         return gr.Gallery.update(value=grids,visible=True)
 
-    def extract_lineart(self,files:list,progress=gr.Progress()):
+    def extract_lineart(self,files:list,dilate_it,dilate_ksize,gaussian_ksize, progress=gr.Progress()):
+        output_folder = Path("output").joinpath("postprocess").joinpath("lineart").joinpath(
+            datetime.now().__str__().replace(":", ""))
+        if not output_folder.exists():
+            os.makedirs(output_folder)
+
         lines = []
         for f in progress.tqdm(files):
             print(f.name)
             img = cv2.imread(f.name)
             img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
-            lines.append(self.refextractor.lineart(img))
+            line = self.refextractor.lineart(img,int(dilate_it),int(dilate_ksize),int(gaussian_ksize))
+            cv2.imwrite(output_folder.joinpath(str(len(list(output_folder.iterdir()))) + ".jpg").resolve().__str__(),
+                        line)
+            lines.append(line)
         return gr.Gallery.update(value=lines, visible=True)
     def upscale(self,files:list,upscale_scale:float,upscale_model:str,upscale_sharpen:bool,upscale_sharpen_mode:str,upscale_sharpen_ksize:float,progress=gr.Progress()):
+        output_folder = Path("output").joinpath("postprocess").joinpath("upscale").joinpath(
+            datetime.now().__str__().replace(":", ""))
+        if not output_folder.exists():
+            os.makedirs(output_folder)
         res = []
         for f in progress.tqdm(files):
             print(f.name)
-            img = cv2.imread(f.name)
-            res_img = self.refextractor.upscaler.upscale_img(img,int(upscale_scale),upscale_model)
+            # img = cv2.imread(f.name)
+            img_path = output_folder.joinpath(str(len(list(output_folder.iterdir()))) + ".jpg").resolve()
+            res_path = self.refextractor.upscaler.upscale(f.name,img_path,int(upscale_scale),upscale_model)
+            # res_img = self.refextractor.upscaler.upscale_img(img,int(upscale_scale),upscale_model)
             if upscale_sharpen:
+                res_img = cv2.imread(res_path.resolve().__str__())
                 res_img = self.refextractor.upscaler.sharpen(res_img,upscale_sharpen_mode,upscale_sharpen_ksize)
-            res_img = cv2.cvtColor(res_img,cv2.COLOR_BGR2RGB)
-            res.append(res_img)
-        print("Done upscaling")
-        return gr.Gallery.update(value=res,visible=True)
+                # res_img = cv2.cvtColor(res_img,cv2.COLOR_BGR2RGB)
+                cv2.imwrite(res_path.resolve().__str__(),res_img)
+            # res_img = cv2.cvtColor(res_img,cv2.COLOR_BGR2RGB)
+            # res.append(res_img)
+            res.append(res_path.resolve().__str__())
+            # this has to update iteratively since this is kinda slow
+        yield res
+
+
+        # print("Done upscaling")
+        # return gr.Gallery.update(value=res,visible=True)
     def interface(self):
         output_format = gr.Radio(choices=["imgs","video"],
                                  value="imgs",
@@ -266,6 +295,15 @@ class gradio_ui(object):
                                      info="Upload the folder with images you want to extract lineart",
                                      interactive=True,elem_id="line-files"
                                      )
+        line_dilate_it = gr.Slider(label="Iterations",
+                                   info="More iteration usually gives better result, but slower.",
+                                   minimum=1,maximum=20,value=1,step=1,interactive=True)
+        line_dilate_ksize = gr.Slider(label="Dilation kernel size",
+                                   info="Higher value gives more lines but also more noises.",
+                                   minimum=1,maximum=15,value=3,step=2,interactive=True)
+        line_gaussian_ksize = gr.Slider(label="Gaussian blur kernel size",
+                                      info="You can play with this.",
+                                      minimum=1, maximum=15, value=3, step=2, interactive=True)
         line_submit_btn = gr.Button(value="Extract lineart",variant="primary",interactive=True)
         line_res_gallery = gr.Gallery(label="Lineart Result").style(grid=6)
 
@@ -365,6 +403,10 @@ class gradio_ui(object):
                             with gr.Row():
                                 line_submit_btn.render()
                             with gr.Row():
+                                line_dilate_it.render()
+                                line_dilate_ksize.render()
+                                line_gaussian_ksize.render()
+                            with gr.Row():
                                 line_res_gallery.render()
                             with gr.Row():
                                 line_folder_upload.render()
@@ -400,10 +442,10 @@ class gradio_ui(object):
             mark_btn.click(fn=self.mark_chara,inputs=[mark_folder_upload,mark_chara_target_selection,mark_chara_similarity_threshold],outputs=[mark_message,mark_chara_res_gallery])
 
             grid_submit_btn.click(fn=self.make_grids,inputs=[grid_folder_upload,grid_rows,grid_cols,grid_size],outputs=[grid_res_gallery])
-            line_submit_btn.click(fn=self.extract_lineart,inputs=[line_folder_upload],outputs=[line_res_gallery])
+            line_submit_btn.click(fn=self.extract_lineart,inputs=[line_folder_upload,line_dilate_it,line_dilate_ksize,line_gaussian_ksize],outputs=[line_res_gallery])
             upscale_submit_btn.click(fn=self.upscale,inputs=[upscale_folder_upload,upscale_scale,upscale_model,upscale_sharpen,upscale_sharpen_mode,upscale_sharpen_ksize],outputs=[upscale_res_gallery])
 
-        demo.launch(debug=True,share=True)
+        demo.queue(). launch(debug=True,share=True)
 if __name__ == "__main__":
     ui = gradio_ui()
     ui.interface()

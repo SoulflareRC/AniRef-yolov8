@@ -122,11 +122,12 @@ class RefExtractor(object):
                 merged_video = self.extractor.merge_video_audio(target_folder.joinpath(video.name),audio_path)
                 # return target_folder.joinpath(video.name)
                 return merged_video
-    def lineart(self,img:np.ndarray,ksize=3)->np.ndarray:
-        kernel = np.ones((ksize,ksize), np.uint8)
+    def lineart(self,img:np.ndarray,it_dilate=1, ksize_dilate=3,ksize_gausian=3,)->np.ndarray:
+
         img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # grayscale
-        blurred_img = cv2.GaussianBlur(img_gray, (3, 3), 0)  # remove noise from image
-        img_dilated = cv2.dilate(blurred_img, kernel, iterations=1)  # raising the iterations help with darkness
+        blurred_img = cv2.GaussianBlur(img_gray, (ksize_gausian, ksize_gausian), 0)  # remove noise from image
+        kernel = np.ones((ksize_dilate, ksize_dilate), np.uint8)
+        img_dilated = cv2.dilate(blurred_img, kernel, iterations=it_dilate)  # raising the iterations help with darkness
         img_diff = cv2.absdiff(img_dilated, img_gray)
         # img_diff = cv2.absdiff(blurred_img, img_gray)
         contour = 255-img_diff
