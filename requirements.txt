@@ -1,0 +1,8 @@
+deepdanbooru-onnx==0.0.8
+gdown==4.6.4
+gradio==3.21.0
+opencv-python==4.7.0.72
+scikit-image==0.20.0
+torch
+torchvision
+ultralytics==8.0.54

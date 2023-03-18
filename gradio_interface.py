@@ -1,5 +1,5 @@
 import tempfile
-
+import cv2
 import gradio as gr
 from pathlib import Path
 import os,shutil
@@ -11,6 +11,7 @@ from datetime import datetime
 from extractor import RefExtractor
 import subprocess
 import json
+from tqdm import tqdm
 class gradio_ui(object):
     def __init__(self):
         self.refextractor = RefExtractor()
@@ -132,6 +133,49 @@ class gradio_ui(object):
             return  gr.Radio.update(interactive=True)
 
         return gr.Radio.update()
+
+    #postprocessing
+    def make_grids(self,files:list,row,col,size,progress=gr.Progress()):
+        row = int(row)
+        col = int(col)
+        size = int(size)
+        imgs = [ ]
+        grids = [ ]
+        for f in progress.tqdm(files):
+            print(f.name)
+            img = cv2.imread(f.name)
+            img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
+            # cv2.imshow("test",img)
+            # cv2.waitKey(-1)
+            img = self.refextractor.pad_image(img)
+            img = cv2.resize(img,(size,size),cv2.INTER_CUBIC)
+            imgs.append(img)
+        group_size = row*col
+        for i in range(0,len(imgs),group_size):
+           chunk = imgs[i:min(i+group_size,len(imgs))]
+           grids.append(self.refextractor.make_grid(chunk,row,col))
+        return gr.Gallery.update(value=grids,visible=True)
+
+    def extract_lineart(self,files:list,progress=gr.Progress()):
+        lines = []
+        for f in progress.tqdm(files):
+            print(f.name)
+            img = cv2.imread(f.name)
+            img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
+            lines.append(self.refextractor.lineart(img))
+        return gr.Gallery.update(value=lines, visible=True)
+    def upscale(self,files:list,upscale_scale:float,upscale_model:str,upscale_sharpen:bool,upscale_sharpen_mode:str,upscale_sharpen_ksize:float,progress=gr.Progress()):
+        res = []
+        for f in progress.tqdm(files):
+            print(f.name)
+            img = cv2.imread(f.name)
+            res_img = self.refextractor.upscaler.upscale_img(img,int(upscale_scale),upscale_model)
+            if upscale_sharpen:
+                res_img = self.refextractor.upscaler.sharpen(res_img,upscale_sharpen_mode,upscale_sharpen_ksize)
+            res_img = cv2.cvtColor(res_img,cv2.COLOR_BGR2RGB)
+            res.append(res_img)
+        print("Done upscaling")
+        return gr.Gallery.update(value=res,visible=True)
     def interface(self):
         output_format = gr.Radio(choices=["imgs","video"],
                                  value="imgs",
@@ -201,9 +245,63 @@ class gradio_ui(object):
                                      interactive=True)
         mark_chara_submit = gr.Button(value="Save Character",variant="primary",interactive=True)
         mark_chara_erase  = gr.Button(value="Delete Character", interactive=True)
+
         # post processing
 
-        with gr.Blocks(title="AniRef") as demo:
+        #make grids
+        grid_rows = gr.Slider(minimum=1,maximum=12,value=3,step=1,label="Grid Rows",interactive=True)
+        grid_cols = gr.Slider(minimum=1, maximum=12, value=3, step=1, label="Grid Columns",interactive=True)
+        grid_size = gr.Number(value=300,label="Grid size",info="Size of each image in the grid",interactive=True)
+        grid_folder_upload = gr.File(label="Upload dataset",
+                                     file_count="directory",
+                                     info="Upload the folder with images you want to make into grids",
+                                     interactive=True,elem_id="grid-files"
+                                     )
+        grid_submit_btn = gr.Button(value="Make grids",variant="primary",interactive=True)
+        grid_res_gallery = gr.Gallery(label="Grid Result").style(grid=6)
+
+        #extract line art
+        line_folder_upload = gr.File(label="Upload dataset",
+                                     file_count="directory",
+                                     info="Upload the folder with images you want to extract lineart",
+                                     interactive=True,elem_id="line-files"
+                                     )
+        line_submit_btn = gr.Button(value="Extract lineart",variant="primary",interactive=True)
+        line_res_gallery = gr.Gallery(label="Lineart Result").style(grid=6)
+
+        #Upscaling
+        upscale_scale = gr.Slider(label="Scale to",
+                                  minimum=1,maximum=4,step=1,value=2)
+        upscale_model = gr.Dropdown(label="Model",
+                                    choices=self.refextractor.upscaler.models,
+                                    value=self.refextractor.upscaler.models[0],
+                                    interactive=True)
+        upscale_folder_upload = gr.File(label="Upload dataset",
+                                     file_count="directory",
+                                     info="Upload the folder with images you want to upscale",
+                                     interactive=True,elem_id="up-files"
+                                     )
+        upscale_sharpen = gr.Checkbox(label="Sharpen",
+                                      value=False,
+                                      info="Sharpen the images after upscaling",
+                                      interactive=True)
+        upscale_sharpen_mode = gr.Radio(label="Sharpen Mode",
+                                        value="Laplace",
+                                        choices=self.refextractor.upscaler.sharpen_modes,
+                                        interactive=True)
+        upscale_sharpen_ksize = gr.Number(label="Kernal Size",
+                                          info="This only works for USM mode, higher means stronger effect.",
+                                          value=1,
+                                          interactive=True)
+        upscale_submit_btn = gr.Button(value="Upscale images!", variant="primary", interactive=True)
+        upscale_res_gallery = gr.Gallery(label="Upscale Result").style(grid=6)
+
+        with gr.Blocks(title="AniRef",css="""
+            .file-preview{
+                max-height:20vh;
+                overflow:scroll !important;
+            }
+        """) as demo:
             with gr.Tabs() as tabs:
                 with gr.TabItem("Inference",id=0):
                     with gr.Row(variant="compact"):
@@ -250,8 +348,41 @@ class gradio_ui(object):
                             mark_chara_submit.render()
                             mark_chara_erase.render()
                 with gr.TabItem("Postprocessing",id=2):
-                    with gr.Column():
-                        pass
+                    with gr.Tabs(selected=0):
+                        with gr.TabItem(label="Make grids",id=0):
+                            with gr.Row():
+                                grid_rows.render()
+                                grid_cols.render()
+                            with gr.Row():
+                                grid_size.render()
+                            with gr.Row():
+                                grid_submit_btn.render()
+                            with gr.Row():
+                                grid_res_gallery.render()
+                            with gr.Row():
+                                grid_folder_upload.render()
+                        with gr.TabItem(label="Extract lineart", id=1):
+                            with gr.Row():
+                                line_submit_btn.render()
+                            with gr.Row():
+                                line_res_gallery.render()
+                            with gr.Row():
+                                line_folder_upload.render()
+                        with gr.TabItem(label="Upscaling", id=2):
+                            with gr.Row():
+                                upscale_submit_btn.render()
+                            with gr.Row():
+                                with gr.Box():
+                                    upscale_scale.render()
+                                    upscale_model.render()
+                                with gr.Box():
+                                    upscale_sharpen.render()
+                                    upscale_sharpen_mode.render()
+                                    upscale_sharpen_ksize.render()
+                            with gr.Row():
+                                upscale_res_gallery.render()
+                            with gr.Row():
+                                upscale_folder_upload.render()
             output_format.change(fn=self.mode_options,inputs=output_format,outputs=output_mode)
             vid_submit.click(fn=self.extract_ref,inputs=[output_format,output_mode,model_selection,vid_upload,threshold_slider,padding_slider,conf_threshold_slider],outputs=[res_imgs,res_vid,res_view_btn,res_send_to_mark_btn,vid_message])
             # test_btn.click(fn=self.change_tab,inputs=None,outputs=tabs)
@@ -267,6 +398,10 @@ class gradio_ui(object):
             mark_chara_selection.change(fn=self.switch_chara,inputs=mark_chara_selection,outputs=mark_chara_tags)
 
             mark_btn.click(fn=self.mark_chara,inputs=[mark_folder_upload,mark_chara_target_selection,mark_chara_similarity_threshold],outputs=[mark_message,mark_chara_res_gallery])
+
+            grid_submit_btn.click(fn=self.make_grids,inputs=[grid_folder_upload,grid_rows,grid_cols,grid_size],outputs=[grid_res_gallery])
+            line_submit_btn.click(fn=self.extract_lineart,inputs=[line_folder_upload],outputs=[line_res_gallery])
+            upscale_submit_btn.click(fn=self.upscale,inputs=[upscale_folder_upload,upscale_scale,upscale_model,upscale_sharpen,upscale_sharpen_mode,upscale_sharpen_ksize],outputs=[upscale_res_gallery])
 
         demo.launch(debug=True,share=True)
 if __name__ == "__main__":

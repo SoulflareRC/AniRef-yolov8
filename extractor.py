@@ -24,7 +24,7 @@ import hashlib
 import json
 import gdown
 from utils.lineart_converter import *
-from utils.superresolution import esrgan
+from utils.upscaler import Upscaler
 from utils.extract_frames import *
 from utils.tagger import Tagger
 from yolov8.dataset import *
@@ -42,11 +42,10 @@ class RefExtractor(object):
         self.save_img_format = ".jpg"
 
         # for identifying characters:
-
         self.tagger = Tagger()
-        # self.chara_folder = Path("characters")
-        # self.charas= {}
-        # self.grab_chara()
+
+        # for upscaling
+        self.upscaler = Upscaler()
     def get_md5(self,img: np.ndarray):
         img = Image.fromarray(img)
         return hashlib.md5(img.tobytes()).hexdigest()
@@ -166,10 +165,10 @@ class RefExtractor(object):
             imgs.append(np.zeros_like(imgs[0]))
         for i in range(rows):
             if i == 0 :
-                res =np.vstack(imgs[i*cols:(i+1)*cols])
+                res =np.hstack(imgs[i*cols:(i+1)*cols])
             else:
-                row = np.vstack(imgs[i*cols:(i+1)*cols])
-                res = np.hstack((res,row))
+                row = np.hstack(imgs[i*cols:(i+1)*cols])
+                res = np.vstack((res,row))
 
         # res = res.reshape((900,900,3))
         print(res.shape)
@@ -223,27 +222,42 @@ class RefExtractor(object):
 
 
 if __name__ == "__main__":
-    r = RefExtractor()
-    folder =Path (r"D:\pycharmWorkspace\OPENMI-TEAM-4-Project\output\video_to_imgs\crop\btr")
-    fs = list(folder.iterdir())
-    imgs = [ ]
-    for i in range(10):
-        f = fs[i]
-        img = cv2.imread(f.resolve().__str__())
-        img = r.pad_image(img,padding=0)
-        # cv2.imshow(f"{i}",img)
-        img = cv2.resize(img,(300,300),cv2.INTER_CUBIC)
-        imgs.append(img)
+    # r = RefExtractor()
+    # folder =Path (r"D:\pycharmWorkspace\OPENMI-TEAM-4-Project\output\video_to_imgs\crop\btr")
+    # fs = list(folder.iterdir())
+    # imgs = [ ]
+    # for i in range(10):
+    #     f = fs[i]
+    #     img = cv2.imread(f.resolve().__str__())
+    #     img = r.pad_image(img,padding=0)
+    #     # cv2.imshow(f"{i}",img)
+    #     img = cv2.resize(img,(300,300),cv2.INTER_CUBIC)
+    #     imgs.append(img)
+    # # cv2.waitKey(-1)
+    # grid = r.make_grid(imgs,4,3)
+    # cv2.imshow("grid",grid)
+    # # grid = r.sharpen(grid)
+    # # cv2.imshow("sharp",grid)
+    #
+    # grid = r.lineart(grid)
+    #
+    # cv2.imshow("line",grid)
     # cv2.waitKey(-1)
-    grid = r.make_grid(imgs,4,3)
-    cv2.imshow("grid",grid)
-    # grid = r.sharpen(grid)
-    # cv2.imshow("sharp",grid)
+    u = Upscaler()
+    img_path = r"D:\pycharmWorkspace\OPENMI-TEAM-4-Project\output\video_to_imgs\crop\btr\12.jpg"
+    img = cv2.imread(img_path)
+    # res_img = u.upscale_img(img,scale=2)
 
-    grid = r.lineart(grid)
-
-    cv2.imshow("line",grid)
+    cv2.imshow("Original",img)
+    # cv2.imshow("Upscaled",res_img)
+    res_img = u.upscale_img(img,model_name=u.models[1])
+    res_img = u.sharpen(res_img, mode="USM",ksize=5)
+    res_img2 = u.sharpen(res_img, mode="USM", ksize=15)
+    cv2.imshow("Sharpened", res_img)
+    cv2.imshow("Sharpened2", res_img2)
     cv2.waitKey(-1)
+    # res =  u.upscale(in_path=Path(img_path),out_path="test.jpg",scale=4,model_name=u.models[2])
+    # print(res.resolve())
 
 
     # models_folder_link = "https://drive.google.com/drive/folders/19Cnkg0y7kYq2uyC05E1DdLX24EEZjGlK?usp=share_link"

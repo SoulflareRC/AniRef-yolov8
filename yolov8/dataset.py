@@ -3,7 +3,7 @@ import ultralytics.yolo.engine.results
 from ultralytics import YOLO
 from ultralytics.yolo.engine.results import *
 from skimage.metrics import structural_similarity as ssim
-import cv2.cv2
+import cv2
 import time
 import torch
 import  pathlib
