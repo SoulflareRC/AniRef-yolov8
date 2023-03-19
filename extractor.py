@@ -1,9 +1,10 @@
 import os
 import time
-
+from datetime import datetime
 from ultralytics import YOLO
 from ultralytics.yolo.v8.detect.predict import DetectionPredictor
 from ultralytics.yolo.engine.predictor import BasePredictor
+from ultralytics.yolo.utils import DEFAULT_CFG
 import cv2
 import gradio
 import numpy as np
@@ -60,7 +61,7 @@ class RefExtractor(object):
         for model in models:
             print(model)
         return models
-    def extract_chara(self,video_path,output_format="imgs",mode="crop",frame_diff_threshold = 0.2,padding=0.0,conf_threshold=0.0)->Path:
+    def extract_chara(self,video_path,output_format="imgs",mode="crop",frame_diff_threshold = 0.2,padding=0.0,conf_threshold=0.0,iou_threshold=0.6)->Path:
         '''
         :param video_path: path to
         :param output_format:
@@ -79,21 +80,29 @@ class RefExtractor(object):
                 res_paths = []
                 if self.model == None:
                     self.model = YOLO(self.model_path)
-                target_folder = self.output_dir.joinpath("video_to_imgs").joinpath(mode).joinpath(video.stem)
+                # target_folder = self.output_dir.joinpath("video_to_imgs").joinpath(mode).joinpath(video.stem) # don't use video.stem since cv2 fails to write when path has special char
+                target_folder = self.output_dir.joinpath("video_to_imgs").joinpath(mode).joinpath(datetime.now().__str__().replace(":", ""))
                 if not target_folder.exists():
                     os.makedirs(target_folder)
                 self.extractor.video = video_path
                 keyframes:list[Frame] = self.extractor.extract_keyframes(frame_diff_threshold)
                 for frame in tqdm(keyframes):
                     frame = frame.img
-                    res:list[Results] = self.model.predict(frame)
-                    boxes = get_boxes(res,conf_threshold)
+                    res:list[Results] = self.model.predict(frame,iou=iou_threshold,conf=conf_threshold)
+                    boxes = get_boxes(res)
                     pad_boxes(frame,boxes,scale=padding)
                     if mode=="crop":
                         res_imgs = crop_boxes(frame,boxes)
                         for res_img in res_imgs:
                             target_path = target_folder.joinpath(f"{len(list(target_folder.iterdir()))}{self.save_img_format}").__str__()
+                            # try:
+                            # cv2.imshow("Test",res_img) # not res_img's issue
+                            print(res_img.shape)
+                            print(target_path)
                             cv2.imwrite(target_path,res_img)
+                            # cv2.waitKey(-1)
+                            # except:
+                            #     print(res_img.shape)
                             # res_paths.append(target_path)
                     elif mode=="draw":
                         res_img = draw_boxes(frame,boxes)
@@ -111,8 +120,11 @@ class RefExtractor(object):
                 torch.cuda.empty_cache()
                 return target_folder
             elif output_format=="video":
-                target_folder = self.output_dir.joinpath("video_to_video").joinpath(video.stem)
-                predictor: BasePredictor = DetectionPredictor()
+                target_folder = self.output_dir.joinpath("video_to_video").joinpath(datetime.now().__str__().replace(":", ""))
+                cfg = DEFAULT_CFG
+                cfg.iou = iou_threshold
+                cfg.conf = conf_threshold
+                predictor: BasePredictor = DetectionPredictor(cfg=cfg)
                 predictor.save_dir =target_folder
                 self.extractor.video = video_path
                 lowf_vid = self.extractor.adjust_framerate(10)
@@ -122,7 +134,12 @@ class RefExtractor(object):
                 merged_video = self.extractor.merge_video_audio(target_folder.joinpath(video.name),audio_path)
                 # return target_folder.joinpath(video.name)
                 return merged_video
-    def lineart(self,img:np.ndarray,it_dilate=1, ksize_dilate=3,ksize_gausian=3,)->np.ndarray:
+            else:
+                print("Output format other than video or imgs is not implemented")
+        else:
+            print("Video ",video_path," doesn't exist")
+
+    def lineart(self,img:np.ndarray,it_dilate=1, ksize_dilate=3,ksize_gausian=3)->np.ndarray:
 
         img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # grayscale
         blurred_img = cv2.GaussianBlur(img_gray, (ksize_gausian, ksize_gausian), 0)  # remove noise from image
@@ -223,6 +240,24 @@ class RefExtractor(object):
 
 
 if __name__ == "__main__":
+
+    cfg = DEFAULT_CFG
+    cfg.iou = 0.5
+    cfg.conf = 0.2
+
+    print(cfg)
+    # exit(0)
+    predictor: BasePredictor = DetectionPredictor(cfg=cfg)
+    predictor.save_dir = Path("test_pred")
+
+    video_path = r"D:\pycharmWorkspace\flaskProj\done\To love ru darkness opening HD.mp4"
+    extractor = Extractor(video_path,output_dir="temp")
+    extractor.video = video_path
+    lowf_vid = extractor.adjust_framerate(10)
+    audio_path = extractor.extract_audio(Path(lowf_vid))
+    # lowf_vid = r"D:\Git\OPENMI-TEAM-4-Project\temp\Lycoris Recoil 第3集—在线播放—樱花动漫[index.m3u8].mp4"
+    predictor ( source=lowf_vid, model=r"D:\Git\OPENMI-TEAM-4-Project\models\yolov8\AniRef40000-n-epoch40.pt")
+    torch.cuda.empty_cache()
     # r = RefExtractor()
     # folder =Path (r"D:\pycharmWorkspace\OPENMI-TEAM-4-Project\output\video_to_imgs\crop\btr")
     # fs = list(folder.iterdir())
@@ -244,19 +279,19 @@ if __name__ == "__main__":
     #
     # cv2.imshow("line",grid)
     # cv2.waitKey(-1)
-    u = Upscaler()
-    img_path = r"D:\pycharmWorkspace\OPENMI-TEAM-4-Project\output\video_to_imgs\crop\btr\12.jpg"
-    img = cv2.imread(img_path)
+    # u = Upscaler()
+    # img_path = r"D:\pycharmWorkspace\OPENMI-TEAM-4-Project\output\video_to_imgs\crop\btr\12.jpg"
+    # img = cv2.imread(img_path)
     # res_img = u.upscale_img(img,scale=2)
 
-    cv2.imshow("Original",img)
-    # cv2.imshow("Upscaled",res_img)
-    res_img = u.upscale_img(img,model_name=u.models[1])
-    res_img = u.sharpen(res_img, mode="USM",ksize=5)
-    res_img2 = u.sharpen(res_img, mode="USM", ksize=15)
-    cv2.imshow("Sharpened", res_img)
-    cv2.imshow("Sharpened2", res_img2)
-    cv2.waitKey(-1)
+    # cv2.imshow("Original",img)
+    # # cv2.imshow("Upscaled",res_img)
+    # res_img = u.upscale_img(img,model_name=u.models[1])
+    # res_img = u.sharpen(res_img, mode="USM",ksize=5)
+    # res_img2 = u.sharpen(res_img, mode="USM", ksize=15)
+    # cv2.imshow("Sharpened", res_img)
+    # cv2.imshow("Sharpened2", res_img2)
+    # cv2.waitKey(-1)
     # res =  u.upscale(in_path=Path(img_path),out_path="test.jpg",scale=4,model_name=u.models[2])
     # print(res.resolve())
 

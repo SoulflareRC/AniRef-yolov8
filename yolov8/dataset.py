@@ -15,7 +15,9 @@ def get_boxes(pred:list[Results],conf_threshold=0.0)->list[Boxes]:
     ret = []
     for res in pred:
         boxes = res.boxes
+        # print(boxes.shape)
         for box in boxes:
+            print(box.xyxy,box.shape)
             if box.conf>conf_threshold:
                 ret.append(box)
     return ret

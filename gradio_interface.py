@@ -23,8 +23,10 @@ class gradio_ui(object):
                 except:
                     pass
         self.last_folder = Path("output")
+        self.last_mark_folder = Path("output").joinpath("mark_characters")
+        self.chara_folders = {}
     #character related
-    def infer_chara(self,img:np.ndarray,existing_tags:list[str]):
+    def infer_chara(self,img:np.ndarray,existing_tags:list[str],tagging_threshold:float):
         '''
         :param img: ref img to be tagged
         :param existing_tags:existing tags
@@ -32,6 +34,7 @@ class gradio_ui(object):
         '''
         if img is None:
             return gr.CheckboxGroup.update()
+        self.refextractor.tagger.d.threshold = tagging_threshold
         tags:set =  self.refextractor.tagger.tag_chara(img)
         print("Existing tags:",existing_tags)
         final_tags =  list(tags.union(existing_tags))
@@ -76,7 +79,7 @@ class gradio_ui(object):
         tags = self.refextractor.tagger.chara_tags[name]
         return gr.CheckboxGroup.update(choices=tags,value=tags,interactive=True)
     # def mark_chara(self,files:list,target_charas:list[str],similarity_threshold):
-    def mark_chara(self, files: list, target_chara:str, similarity_threshold):
+    def mark_chara(self, files: list, target_charas:list, similarity_threshold):
         # files will be a list of tempfile
         print("Starting marking characters!")
         imgs = []
@@ -84,11 +87,22 @@ class gradio_ui(object):
             imgs.append(Image.open(f.name))
         # self.refextractor.tagger.mark_chara(folder_path,target_charas,similarity_threshold)
         output_folder = Path("output").joinpath("mark_characters").joinpath(datetime.now().__str__().replace(":",""))
-        res_folders = self.refextractor.tagger.mark_chara_from_imgs(imgs=imgs,charas=[target_chara],output_folder=output_folder)
-        chara_folder:Path = res_folders[target_chara]
+        res_folders = self.refextractor.tagger.mark_chara_from_imgs(imgs=imgs,charas=target_charas,output_folder=output_folder,similarity_threshold=similarity_threshold)
+        self.chara_folders = res_folders
+        chara_folder:Path = res_folders[target_charas[0]]
 
         return gr.Textbox.update(value="Successfully classified characters!"),\
-            gr.Gallery.update(value=[f.resolve().__str__() for f in list(chara_folder.iterdir())],label=target_chara,visible=True)
+            gr.Gallery.update(value=[f.resolve().__str__() for f in list(chara_folder.iterdir())],label=target_charas[0],visible=True),\
+            gr.Radio.update(choices=target_charas,value=target_charas[0],visible=True,interactive=True)
+    def view_mark_chara(self,target_chara:str):
+        '''
+        Change mark chara res gallery to target chara
+        '''
+        print("Viewing ",target_chara)
+        if target_chara in self.chara_folders:
+            chara_folder = self.chara_folders[target_chara]
+            return gr.Gallery.update(value=[f.resolve().__str__() for f in list(chara_folder.iterdir())],label=target_chara,visible=True)
+        return gr.Gallery.update()
     def view_last_folder(self):
         subprocess.Popen(f"explorer {self.last_folder.resolve()}")
     def send_last_to_mark(self):
@@ -96,7 +110,7 @@ class gradio_ui(object):
             fs = list(self.last_folder.iterdir())
             return gr.File.update(value=[f.resolve().__str__() for f in fs]), gr.Tabs.update(selected=1)
         return gr.File.update(), gr.Tabs.update()
-    def extract_ref(self,format,mode,model_name,video_path,threshold,padding,conf_threshold):
+    def extract_ref(self,format,mode,model_name,video_path,threshold,padding,conf_threshold,iou_threshold):
         print(video_path)
         if model_name not in self.refextractor.model_path.__str__():
             self.refextractor.model = None
@@ -104,7 +118,7 @@ class gradio_ui(object):
         print(f"Extracting reference in {format} format, {mode} mode")
         if format=="imgs":
 
-            res_folder_path = self.refextractor.extract_chara(video_path=video_path,output_format=format,mode=mode,frame_diff_threshold=threshold,padding=padding,conf_threshold=conf_threshold)
+            res_folder_path = self.refextractor.extract_chara(video_path=video_path,output_format=format,mode=mode,frame_diff_threshold=threshold,padding=padding,conf_threshold=conf_threshold,iou_threshold=iou_threshold)
             res_imgs_paths = list(res_folder_path.iterdir())
             print(res_imgs_paths)
             self.last_folder = res_folder_path
@@ -114,7 +128,7 @@ class gradio_ui(object):
                     gr.Button.update(visible=True,interactive=True),\
                     gr.Textbox.update(value=f"Results saved in {res_folder_path.resolve()}")
         elif format=="video":
-            res_video_path = self.refextractor.extract_chara(video_path=video_path.encode('unicode_escape').decode(),output_format=format,mode=mode,frame_diff_threshold=threshold,padding=padding,conf_threshold=conf_threshold)
+            res_video_path = self.refextractor.extract_chara(video_path=video_path,output_format=format,mode=mode,frame_diff_threshold=threshold,padding=padding,conf_threshold=conf_threshold,iou_threshold=iou_threshold)
             print(res_video_path)
             self.last_folder = res_video_path.parent
             return gr.Gallery.update(visible=False), \
@@ -200,7 +214,7 @@ class gradio_ui(object):
             # res.append(res_img)
             res.append(res_path.resolve().__str__())
             # this has to update iteratively since this is kinda slow
-        yield res
+        return res
 
 
         # print("Done upscaling")
@@ -221,11 +235,14 @@ class gradio_ui(object):
                                       label="Model",
                                       info="Which detection model to use. Models' sizes go from n->s->m->l. The larger the more accurate, but also slower.",
                                       interactive=True)
-        threshold_slider = gr.Slider(minimum=0.0,maximum=1.0,value=0.2,label="Keyframe Threshold",info="Larger value means fewer keyframe extracted for imgs mode",interactive=True)
-        padding_slider = gr.Slider(minimum=-0.5,maximum=1.0,value=0.0,label="Detection Padding",info="Pad the detection boxes(optional)",interactive=True)
-        conf_threshold_slider = gr.Slider(minimum=0.0, maximum=1.0, value=0.0, label="Detection Confidence Threshold",
+        threshold_slider = gr.Slider(minimum=0.0,maximum=1.0,value=0.2,step=0.05,label="Keyframe Threshold",info="Larger value means fewer keyframe extracted for imgs mode",interactive=True)
+        padding_slider = gr.Slider(minimum=-0.5,maximum=1.0,value=0.0,step=0.05,label="Detection Padding",info="Pad the detection boxes(optional)",interactive=True)
+        conf_threshold_slider = gr.Slider(minimum=0.1, maximum=1.0, value=0.1,step=0.05, label="Detection Confidence Threshold",
                                      info="How confident the detection result has to be to be considered.", interactive=True)
-
+        iou_threshold_slider = gr.Slider(minimum=0.0, maximum=1.0, value=0.6, step=0.05,
+                                          label="Box Merging(IOU) Threshold",
+                                          info="How large the intersection of boxes has to be to be merged.",
+                                          interactive=True)
         vid_upload = gr.Video(label="Upload your video!")
         vid_submit = gr.Button(value="Submit video!",variant="primary")
         vid_message = gr.Textbox(interactive=False)
@@ -245,16 +262,17 @@ class gradio_ui(object):
                                      info="Upload the folder with images you want to mark",
                                      interactive=True,elem_id="mark-files"
                                      )
-        mark_chara_target_selection = gr.Radio(choices=list(self.refextractor.tagger.chara_tags.keys()),value=None,
+        mark_chara_target_selection = gr.CheckboxGroup(choices=list(self.refextractor.tagger.chara_tags.keys()),value=None,
                                                        label="Target Characters",
                                                        info="Check the names of characters you want to mark in this dataset",
                                                        # interactive=True
                                                        )
-        mark_chara_similarity_threshold = gr.Slider(minimum=0.0,maximum=1.0,value=0.4,
+        mark_chara_similarity_threshold = gr.Slider(minimum=0.0,maximum=1.0,value=0.4,step=0.05,
                                                     label="Similarity threshold",
                                                     info="How similar the image has to be to be considered as a character.",
                                                     interactive=True
                                                     )
+        mark_chara_res_chara_selection = gr.Radio(label="Show Result of",visible=False,interactive=False)
         mark_chara_res_gallery = gr.Gallery(label="Result",visible=False)
         mark_chara_res_gallery.style(grid=6,container=True)
 
@@ -264,6 +282,10 @@ class gradio_ui(object):
         mark_chara_selection = gr.Dropdown(label="Character",
                                            choices=list(self.refextractor.tagger.chara_tags.keys()),
                                            interactive=True)
+        mark_chara_tagging_threshold = gr.Slider(label="Tagging threshold",
+                                                 value=self.refextractor.tagger.d.threshold,
+                                                 minimum=0.0,maximum=1.0,step=0.05,
+                                                 interactive=True)
         mark_chara_img = gr.Image(label='Character Reference Image',
                                   # tool="select",
                                   interactive=True)
@@ -349,6 +371,7 @@ class gradio_ui(object):
                     with gr.Row():
                         with gr.Accordion(label="Advanced",open=False):
                             conf_threshold_slider.render()
+                            iou_threshold_slider.render()
                             threshold_slider.render()
                             padding_slider.render()
                     with gr.Row():
@@ -376,10 +399,12 @@ class gradio_ui(object):
                             mark_chara_similarity_threshold.render()
                             mark_btn.render()
                             mark_message.render()
+                            mark_chara_res_chara_selection.render()
                             mark_chara_res_gallery.render()
                             mark_folder_upload.render()
                         with gr.Column(scale=1):
                             mark_chara_selection.render()
+                            mark_chara_tagging_threshold.render()
                             mark_chara_img.render()
                             mark_chara_tags.render()
                             mark_chara_name.render()
@@ -426,26 +451,27 @@ class gradio_ui(object):
                             with gr.Row():
                                 upscale_folder_upload.render()
             output_format.change(fn=self.mode_options,inputs=output_format,outputs=output_mode)
-            vid_submit.click(fn=self.extract_ref,inputs=[output_format,output_mode,model_selection,vid_upload,threshold_slider,padding_slider,conf_threshold_slider],outputs=[res_imgs,res_vid,res_view_btn,res_send_to_mark_btn,vid_message])
+            vid_submit.click(fn=self.extract_ref,inputs=[output_format,output_mode,model_selection,vid_upload,threshold_slider,padding_slider,conf_threshold_slider,iou_threshold_slider],outputs=[res_imgs,res_vid,res_view_btn,res_send_to_mark_btn,vid_message])
             # test_btn.click(fn=self.change_tab,inputs=None,outputs=tabs)
             res_send_to_mark_btn.click(fn=self.send_last_to_mark, outputs=[mark_folder_upload, tabs])
             res_view_btn.click(fn=self.view_last_folder)
 
             # character marking stuff
             mark_use_last_folder_btn.click(fn=self.send_last_to_mark,outputs=[mark_folder_upload,tabs])
-            mark_chara_img.change(fn=self.infer_chara,inputs=[mark_chara_img,mark_chara_tags],outputs=[mark_chara_tags])
+            mark_chara_img.change(fn=self.infer_chara,inputs=[mark_chara_img,mark_chara_tags,mark_chara_tagging_threshold],outputs=[mark_chara_tags])
             mark_chara_submit.click(fn=self.save_chara,inputs=[mark_chara_name,mark_chara_tags],outputs=[mark_chara_selection,mark_chara_target_selection])
             mark_chara_erase.click(fn=self.erase_chara, inputs=[mark_chara_selection],
                                     outputs=[mark_chara_selection, mark_chara_target_selection])
             mark_chara_selection.change(fn=self.switch_chara,inputs=mark_chara_selection,outputs=mark_chara_tags)
 
-            mark_btn.click(fn=self.mark_chara,inputs=[mark_folder_upload,mark_chara_target_selection,mark_chara_similarity_threshold],outputs=[mark_message,mark_chara_res_gallery])
+            mark_btn.click(fn=self.mark_chara,inputs=[mark_folder_upload,mark_chara_target_selection,mark_chara_similarity_threshold],outputs=[mark_message,mark_chara_res_gallery,mark_chara_res_chara_selection])
+            mark_chara_res_chara_selection.change(fn=self.view_mark_chara,inputs=[mark_chara_res_chara_selection],outputs=[mark_chara_res_gallery])
 
             grid_submit_btn.click(fn=self.make_grids,inputs=[grid_folder_upload,grid_rows,grid_cols,grid_size],outputs=[grid_res_gallery])
             line_submit_btn.click(fn=self.extract_lineart,inputs=[line_folder_upload,line_dilate_it,line_dilate_ksize,line_gaussian_ksize],outputs=[line_res_gallery])
             upscale_submit_btn.click(fn=self.upscale,inputs=[upscale_folder_upload,upscale_scale,upscale_model,upscale_sharpen,upscale_sharpen_mode,upscale_sharpen_ksize],outputs=[upscale_res_gallery])
 
-        demo.queue(). launch(debug=True,share=True)
+        demo.queue().launch()
 if __name__ == "__main__":
     ui = gradio_ui()
     ui.interface()
