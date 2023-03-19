@@ -49,7 +49,8 @@ class Upscaler(object):
         ]
         if verbose:
             cmd.append('-v')
-        subprocess.run(cmd)
+        # subprocess.run(cmd)
+        subprocess.check_call(cmd)
         return Path(out_path)
 
     def upscale_img(self, img:np.ndarray, scale=2, model_name="realesr-animevideov3",

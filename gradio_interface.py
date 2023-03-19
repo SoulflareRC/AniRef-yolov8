@@ -12,6 +12,7 @@ from extractor import RefExtractor
 import subprocess
 import json
 from tqdm import tqdm
+from argparse import ArgumentParser
 class gradio_ui(object):
     def __init__(self):
         self.refextractor = RefExtractor()
@@ -161,7 +162,7 @@ class gradio_ui(object):
         for f in progress.tqdm(files):
             print(f.name)
             img = cv2.imread(f.name)
-            img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
+            # img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
             # cv2.imshow("test",img)
             # cv2.waitKey(-1)
             img = self.refextractor.pad_image(img)
@@ -173,6 +174,7 @@ class gradio_ui(object):
            chunk = imgs[i:min(i+group_size,len(imgs))]
            grid = self.refextractor.make_grid(chunk,row,col)
            cv2.imwrite(output_folder.joinpath(str(len(list(output_folder.iterdir()))) + ".jpg").resolve().__str__(),grid )
+           grid = cv2.cvtColor(grid,cv2.COLOR_BGR2RGB)
            grids.append(grid)
 
         return gr.Gallery.update(value=grids,visible=True)
@@ -354,6 +356,7 @@ class gradio_ui(object):
                                           value=1,
                                           interactive=True)
         upscale_submit_btn = gr.Button(value="Upscale images!", variant="primary", interactive=True)
+        upscale_stop_btn = gr.Button(value="Stop",interactive=True)
         upscale_res_gallery = gr.Gallery(label="Upscale Result").style(grid=6)
 
         with gr.Blocks(title="AniRef",css="""
@@ -438,6 +441,7 @@ class gradio_ui(object):
                         with gr.TabItem(label="Upscaling", id=2):
                             with gr.Row():
                                 upscale_submit_btn.render()
+                                # upscale_stop_btn.render()
                             with gr.Row():
                                 with gr.Box():
                                     upscale_scale.render()
@@ -469,9 +473,9 @@ class gradio_ui(object):
 
             grid_submit_btn.click(fn=self.make_grids,inputs=[grid_folder_upload,grid_rows,grid_cols,grid_size],outputs=[grid_res_gallery])
             line_submit_btn.click(fn=self.extract_lineart,inputs=[line_folder_upload,line_dilate_it,line_dilate_ksize,line_gaussian_ksize],outputs=[line_res_gallery])
-            upscale_submit_btn.click(fn=self.upscale,inputs=[upscale_folder_upload,upscale_scale,upscale_model,upscale_sharpen,upscale_sharpen_mode,upscale_sharpen_ksize],outputs=[upscale_res_gallery])
-
-        demo.queue().launch()
+            upscale_event =  upscale_submit_btn.click(fn=self.upscale,inputs=[upscale_folder_upload,upscale_scale,upscale_model,upscale_sharpen,upscale_sharpen_mode,upscale_sharpen_ksize],outputs=[upscale_res_gallery])
+            upscale_stop_btn.click(cancels=[upscale_event],fn=None)
+        demo.queue().launch(share=True)
 if __name__ == "__main__":
     ui = gradio_ui()
     ui.interface()
