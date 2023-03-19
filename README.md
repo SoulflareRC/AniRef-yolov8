@@ -6,11 +6,13 @@ This project mainly presents a toolchain for artists to quickly extract referenc
 We trained an object detection model for detecting anime characters based on the state-of-the-art [YOLOv8](https://github.com/ultralytics/ultralytics/tree/main). We provide 4 models that are based on 4 sizes of YOLOv8 and all of them are trained on hand-annotated dataset focused on anime screenshots. Detailed metrics of each model can be found in [validation_metrics](https://github.com/SoulflareRC/AniRef-yolov8/tree/main/validation_metrics) <br>
 | Model                     | size<br><sup>(pixels) | mAP<sup>val<br>50-95 | mAP<sup>test<br>50-95 | Speed<br><sup>RTX 3060 12G<br>(ms)  | 
 | ------------------------- | --------------------- | -------------------- | ----------------------| ----------------------------------- | 
-| [AniRef40000-n-epoch40]() | 640                   | 49.9                 | 45.9                  | 3.0                                 | 
-| [AniRef40000-s-epoch40]() | 640                   | 52.2                 | 50.6                  | 6.4                                 | 
-| [AniRef40000-m-epoch75]() | 640                   | 50.2                 | 48.2                  | 15.0                                |
-| [AniRef40000-l-epoch50]() | 640                   | 52.9                 | 50.5                  | 23.1                                | 
-
+| [AniRef40000-n-epoch40](https://github.com/SoulflareRC/AniRef-yolov8/releases/download/model/AniRef40000-n-epoch40.pt) | 640                   | 49.9                 | 45.9                  | 3.0                                 | 
+| [AniRef40000-s-epoch40](https://github.com/SoulflareRC/AniRef-yolov8/releases/download/model/AniRef40000-s-epoch40.pt) | 640                   | 52.2                 | 50.6                  | 6.4                                 | 
+| [AniRef40000-m-epoch75](https://github.com/SoulflareRC/AniRef-yolov8/releases/download/model/AniRef40000-m-epoch75.pt) | 640                   | 50.2                 | 48.2                  | 15.0                                |
+| [AniRef40000-l-epoch50](https://github.com/SoulflareRC/AniRef-yolov8/releases/download/model/AniRef40000-l-epoch50.pt) | 640                   | 52.9                 | 50.5                  | 23.1                                | 
+### Known Issues
+  - Performance of the models worsens when there exists too many overlapping characters. 
+  - AniRef40000-m-epoch75 was trained on an older version of the dataset for 40 epochs and needs a retrain. 
 ### Dataset
 The dataset is first collected with [Yet-Another-Anime-Segmenter](https://github.com/zymk9/Yet-Another-Anime-Segmenter) on keyframes of anime compilation videos from the internet, and then manually corrected on Roboflow. The most recent version includes 10k images(40k after augmentation) and the datasets are available on [google drive](https://drive.google.com/drive/folders/1q1F1pJhRNboJkdi8XVVRiL7-_aeBFvTh?usp=share_link).
 ### Installation
