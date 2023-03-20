@@ -41,5 +41,8 @@ pip install -r requirements.txt
 python gradio_interface.py
 ```
 ### Usage
-See the [project wiki](https://github.com/SoulflareRC/AniRef-yolov8/wiki) for detailed instructions on how to use each function of the app. 
+See the [project wiki](https://github.com/SoulflareRC/AniRef-yolov8/wiki) for detailed instructions on how to use each function of the app. We also provide a demo video for how to use this program. 
+
+
+[![image](https://user-images.githubusercontent.com/107384280/226233017-0921e78e-d33c-41ee-89c4-676779fa14d7.png)](https://youtu.be/mNdLELk8-zA)
 
