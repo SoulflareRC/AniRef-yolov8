@@ -63,11 +63,15 @@ class gradio_ui(object):
         if name in self.refextractor.tagger.chara_tags.keys():
             self.refextractor.tagger.chara_tags.pop(name)
             print (self.refextractor.tagger.chara_tags)
+        if name in self.chara_folders.keys():
+            self.chara_folders.pop(name)
         with open("characters.json",'w') as f:
             json.dump(self.refextractor.tagger.chara_tags,f,indent=True)
 
+
         return gr.Dropdown.update(choices=list(self.refextractor.tagger.chara_tags.keys()),value=None,interactive=True),\
-                gr.Radio.update(choices=list(self.refextractor.tagger.chara_tags.keys()),interactive=True)
+                gr.Radio.update(choices=list(self.refextractor.tagger.chara_tags.keys()),interactive=True), \
+                gr.Radio.update(choices=list(self.chara_folders.keys()))
     def switch_chara(self, name):
         '''
 
@@ -94,7 +98,7 @@ class gradio_ui(object):
 
         return gr.Textbox.update(value="Successfully classified characters!"),\
             gr.Gallery.update(value=[f.resolve().__str__() for f in list(chara_folder.iterdir())],label=target_charas[0],visible=True),\
-            gr.Radio.update(choices=target_charas,value=target_charas[0],visible=True,interactive=True)
+            gr.Radio.update(choices=target_charas,value=list(self.chara_folders.keys()),visible=True,interactive=True)
     def view_mark_chara(self,target_chara:str):
         '''
         Change mark chara res gallery to target chara
@@ -465,7 +469,7 @@ class gradio_ui(object):
             mark_chara_img.change(fn=self.infer_chara,inputs=[mark_chara_img,mark_chara_tags,mark_chara_tagging_threshold],outputs=[mark_chara_tags])
             mark_chara_submit.click(fn=self.save_chara,inputs=[mark_chara_name,mark_chara_tags],outputs=[mark_chara_selection,mark_chara_target_selection])
             mark_chara_erase.click(fn=self.erase_chara, inputs=[mark_chara_selection],
-                                    outputs=[mark_chara_selection, mark_chara_target_selection])
+                                    outputs=[mark_chara_selection, mark_chara_target_selection, mark_chara_res_chara_selection])
             mark_chara_selection.change(fn=self.switch_chara,inputs=mark_chara_selection,outputs=mark_chara_tags)
 
             mark_btn.click(fn=self.mark_chara,inputs=[mark_folder_upload,mark_chara_target_selection,mark_chara_similarity_threshold],outputs=[mark_message,mark_chara_res_gallery,mark_chara_res_chara_selection])
