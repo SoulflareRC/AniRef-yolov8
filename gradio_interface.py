@@ -98,7 +98,7 @@ class gradio_ui(object):
 
         return gr.Textbox.update(value="Successfully classified characters!"),\
             gr.Gallery.update(value=[f.resolve().__str__() for f in list(chara_folder.iterdir())],label=target_charas[0],visible=True),\
-            gr.Radio.update(choices=target_charas,value=list(self.chara_folders.keys()),visible=True,interactive=True)
+            gr.Radio.update(choices=list(self.chara_folders.keys()),value=target_charas[0],visible=True,interactive=True)
     def view_mark_chara(self,target_chara:str):
         '''
         Change mark chara res gallery to target chara
