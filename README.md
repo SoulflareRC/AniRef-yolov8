@@ -2,6 +2,12 @@
 ![akihito](https://user-images.githubusercontent.com/107384280/225947977-94856df1-dfb7-4eb8-a4a2-ce8edf72edaf.png)
 ### What does AniRef do?
 This project mainly presents a toolchain for artists to quickly extract reference images from anime videos. We first use an object detection model to crop out the characters, and then use [Deepdanbooru](https://github.com/KichangKim/DeepDanbooru) to tag a character on a subset of Danbooru Tags and then goes to identify the character in cropped out images based on the tags inferenced from a few reference images. 
+##### Currently Supported Features
+- Character Detection
+- Character Identification
+- Image Restoration using [Real-ESRGAN ncnn Vulkan](https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan)
+- Image Grids
+- Line Art Extraction
 ### Model
 We trained an object detection model for detecting anime characters based on the state-of-the-art [YOLOv8](https://github.com/ultralytics/ultralytics/tree/main). We provide 4 models that are based on 4 sizes of YOLOv8 and all of them are trained on hand-annotated dataset focused on anime screenshots. Detailed metrics of each model can be found in [validation_metrics](https://github.com/SoulflareRC/AniRef-yolov8/tree/main/validation_metrics) <br>
 | Model                     | size<br><sup>(pixels) | mAP<sup>val<br>50-95 | mAP<sup>test<br>50-95 | Speed<br><sup>RTX 3060 12G<br>(ms)  | 
