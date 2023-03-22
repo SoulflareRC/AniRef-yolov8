@@ -115,7 +115,7 @@ class gradio_ui(object):
             fs = list(self.last_folder.iterdir())
             return gr.File.update(value=[f.resolve().__str__() for f in fs]), gr.Tabs.update(selected=1)
         return gr.File.update(), gr.Tabs.update()
-    def extract_ref(self,format,mode,model_name,video_path,threshold,padding,conf_threshold,iou_threshold):
+    def extract_ref(self,format,mode,model_name,video_path,threshold,padding,conf_threshold,iou_threshold,min_bbox_size):
         print(video_path)
         if model_name not in self.refextractor.model_path.__str__():
             self.refextractor.model = None
@@ -123,7 +123,7 @@ class gradio_ui(object):
         print(f"Extracting reference in {format} format, {mode} mode")
         if format=="imgs":
 
-            res_folder_path = self.refextractor.extract_chara(video_path=video_path,output_format=format,mode=mode,frame_diff_threshold=threshold,padding=padding,conf_threshold=conf_threshold,iou_threshold=iou_threshold)
+            res_folder_path = self.refextractor.extract_chara(video_path=video_path,output_format=format,mode=mode,frame_diff_threshold=threshold,padding=padding,conf_threshold=conf_threshold,iou_threshold=iou_threshold,min_bbox_size=min_bbox_size)
             res_imgs_paths = list(res_folder_path.iterdir())
             print(res_imgs_paths)
             self.last_folder = res_folder_path
@@ -182,22 +182,78 @@ class gradio_ui(object):
            grids.append(grid)
 
         return gr.Gallery.update(value=grids,visible=True)
-
-    def extract_lineart(self,files:list,dilate_it,dilate_ksize,gaussian_ksize, progress=gr.Progress()):
+    def line_option(self,selected:list):
+        # "Gaussian","Laplacian","Neural Network"
+        print("Selected:",selected)
+        res = []
+        if "Gaussian" in selected:
+            res = res+[gr.Slider.update(visible=True,interactive=True),gr.Slider.update(visible=True,interactive=True),gr.Slider.update(visible=True,interactive=True)]
+        else:
+            res = res + [gr.Slider.update(visible=False, interactive=False),
+                         gr.Slider.update(visible=False, interactive=False),
+                         gr.Slider.update(visible=False, interactive=False)]
+        if "Laplacian" in selected:
+            res = res+[gr.Slider.update(visible=True,interactive=True)]
+        else:
+            res = res + [gr.Slider.update(visible=False, interactive=False)]
+        if "Neural Network" in selected:
+            res = res + [gr.Radio.update(visible=True, interactive=True)]
+        else:
+            res = res + [gr.Radio.update(visible=False, interactive=False)]
+        print(len(res))
+        return res
+    def extract_lineart(self,files:list,selected:list[str],
+                        dilate_it,dilate_ksize,gaussian_ksize,
+                        laplacian_ksize,
+                        nn_choice:str,
+                        progress=gr.Progress()):
+        '''
+            line_folder_upload,
+           line_process_options,
+           line_gaussian_dilate_it, line_gaussian_dilate_ksize, line_gaussian_blur_ksize,
+           line_laplacian_ksize,
+           line_nn_choice
+        '''
         output_folder = Path("output").joinpath("postprocess").joinpath("lineart").joinpath(
             datetime.now().__str__().replace(":", ""))
         if not output_folder.exists():
             os.makedirs(output_folder)
+
+        if "Gaussian" in selected:
+            self.refextractor.line_extractor.ksize_gaussian = gaussian_ksize
+            self.refextractor.line_extractor.ksize_dilate = dilate_ksize
+            self.refextractor.line_extractor.it_dilate = dilate_it
+        if "Laplacian" in selected:
+            self.refextractor.line_extractor.ksize_laplacian = laplacian_ksize
+
+
 
         lines = []
         for f in progress.tqdm(files):
             print(f.name)
             img = cv2.imread(f.name)
             img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
-            line = self.refextractor.lineart(img,int(dilate_it),int(dilate_ksize),int(gaussian_ksize))
+            if "Gaussian" in selected:
+                print(img.shape)
+                img = self.refextractor.line_extractor.gaussian(img)
+                img = cv2.cvtColor(img,cv2.COLOR_GRAY2BGR)
+            if "Laplacian" in selected:
+                print(img.shape)
+                img = self.refextractor.line_extractor.laplacian(img)
+            if "Neural Network" in selected:# ["Anime2Sketch", "MangaLineExtraction"]
+                if nn_choice=="Anime2Sketch":
+                    print(img.shape)
+                    img = self.refextractor.line_extractor.sketch_line(img)
+                elif nn_choice=="MangaLineExtraction":
+                    print(img.shape)
+                    img = self.refextractor.line_extractor.manga_line_batch(img)
             cv2.imwrite(output_folder.joinpath(str(len(list(output_folder.iterdir()))) + ".jpg").resolve().__str__(),
-                        line)
-            lines.append(line)
+                        img)
+            lines.append(img)
+            # line = self.refextractor.lineart(img,int(dilate_it),int(dilate_ksize),int(gaussian_ksize))
+            # cv2.imwrite(output_folder.joinpath(str(len(list(output_folder.iterdir()))) + ".jpg").resolve().__str__(),
+            #             line)
+            # lines.append(line)
         return gr.Gallery.update(value=lines, visible=True)
     def upscale(self,files:list,upscale_scale:float,upscale_model:str,upscale_sharpen:bool,upscale_sharpen_mode:str,upscale_sharpen_ksize:float,progress=gr.Progress()):
         output_folder = Path("output").joinpath("postprocess").joinpath("upscale").joinpath(
@@ -249,6 +305,9 @@ class gradio_ui(object):
                                           label="Box Merging(IOU) Threshold",
                                           info="How large the intersection of boxes has to be to be merged.",
                                           interactive=True)
+        min_bbox_size_slider = gr.Number(label="Minimum Bounding Box Size",
+                                         info="Detection result with shorter edge smaller than this size will not be considered.",
+                                         value=300,precision=10)
         vid_upload = gr.Video(label="Upload your video!")
         vid_submit = gr.Button(value="Submit video!",variant="primary")
         vid_message = gr.Textbox(interactive=False)
@@ -323,15 +382,33 @@ class gradio_ui(object):
                                      info="Upload the folder with images you want to extract lineart",
                                      interactive=True,elem_id="line-files"
                                      )
-        line_dilate_it = gr.Slider(label="Iterations",
-                                   info="More iteration usually gives better result, but slower.",
-                                   minimum=1,maximum=20,value=1,step=1,interactive=True)
-        line_dilate_ksize = gr.Slider(label="Dilation kernel size",
-                                   info="Higher value gives more lines but also more noises.",
-                                   minimum=1,maximum=15,value=3,step=2,interactive=True)
-        line_gaussian_ksize = gr.Slider(label="Gaussian blur kernel size",
-                                      info="You can play with this.",
-                                      minimum=1, maximum=15, value=3, step=2, interactive=True)
+        line_process_options = gr.CheckboxGroup(choices=["Gaussian","Laplacian","Neural Network"],value="Gaussian",label="Line art extraction options",
+                                                info="Choosing multiple options will result in img processed through each method sequentially.",interactive=True,visible=True)
+        '''
+        for gaussian method
+        '''
+        line_gaussian_dilate_it = gr.Slider(label="Iterations",
+                                            info="More iteration usually gives better result, but slower.",
+                                            minimum=1, maximum=20, value=1, step=1, interactive=True)
+        line_gaussian_dilate_ksize = gr.Slider(label="Dilation kernel size",
+                                               info="Higher value gives more lines but also more noises.",
+                                               minimum=1, maximum=15, value=3, step=2, interactive=True)
+        line_gaussian_blur_ksize = gr.Slider(label="Gaussian blur kernel size",
+                                             info="You can play with this.",
+                                             minimum=1, maximum=15, value=3, step=2, interactive=True)
+        '''
+        For Laplacian method 
+        '''
+        line_laplacian_ksize = gr.Slider(label="Laplacian kernel size",
+                                            info="Larger value yields more lines, while more noise will be taken in",
+                                            minimum=1, maximum=15, value=3, step=2, interactive=True,visible=False)
+        '''
+        For Neural Network method
+        '''
+        line_nn_choice = gr.Radio(label="Neural Network Model",choices=["Anime2Sketch", "MangaLineExtraction"],value="Anime2Sketch",interactive=True,visible=False)
+
+
+
         line_submit_btn = gr.Button(value="Extract lineart",variant="primary",interactive=True)
         line_res_gallery = gr.Gallery(label="Lineart Result").style(grid=6)
 
@@ -381,6 +458,7 @@ class gradio_ui(object):
                             iou_threshold_slider.render()
                             threshold_slider.render()
                             padding_slider.render()
+                            min_bbox_size_slider.render()
                     with gr.Row():
                         vid_upload.render()
                     with gr.Row():
@@ -435,9 +513,15 @@ class gradio_ui(object):
                             with gr.Row():
                                 line_submit_btn.render()
                             with gr.Row():
-                                line_dilate_it.render()
-                                line_dilate_ksize.render()
-                                line_gaussian_ksize.render()
+                                line_process_options.render()
+                            with gr.Row():
+                                line_gaussian_dilate_it.render()
+                                line_gaussian_dilate_ksize.render()
+                                line_gaussian_blur_ksize.render()
+                            with gr.Row():
+                                line_laplacian_ksize.render()
+                            with gr.Row():
+                                line_nn_choice.render()
                             with gr.Row():
                                 line_res_gallery.render()
                             with gr.Row():
@@ -459,7 +543,7 @@ class gradio_ui(object):
                             with gr.Row():
                                 upscale_folder_upload.render()
             output_format.change(fn=self.mode_options,inputs=output_format,outputs=output_mode)
-            vid_submit.click(fn=self.extract_ref,inputs=[output_format,output_mode,model_selection,vid_upload,threshold_slider,padding_slider,conf_threshold_slider,iou_threshold_slider],outputs=[res_imgs,res_vid,res_view_btn,res_send_to_mark_btn,vid_message])
+            vid_submit.click(fn=self.extract_ref,inputs=[output_format,output_mode,model_selection,vid_upload,threshold_slider,padding_slider,conf_threshold_slider,iou_threshold_slider,min_bbox_size_slider],outputs=[res_imgs,res_vid,res_view_btn,res_send_to_mark_btn,vid_message])
             # test_btn.click(fn=self.change_tab,inputs=None,outputs=tabs)
             res_send_to_mark_btn.click(fn=self.send_last_to_mark, outputs=[mark_folder_upload, tabs])
             res_view_btn.click(fn=self.view_last_folder)
@@ -476,9 +560,19 @@ class gradio_ui(object):
             mark_chara_res_chara_selection.change(fn=self.view_mark_chara,inputs=[mark_chara_res_chara_selection],outputs=[mark_chara_res_gallery])
 
             grid_submit_btn.click(fn=self.make_grids,inputs=[grid_folder_upload,grid_rows,grid_cols,grid_size],outputs=[grid_res_gallery])
-            line_submit_btn.click(fn=self.extract_lineart,inputs=[line_folder_upload,line_dilate_it,line_dilate_ksize,line_gaussian_ksize],outputs=[line_res_gallery])
+            line_submit_btn.click(fn=self.extract_lineart, inputs=[line_folder_upload,
+                                                                   line_process_options,
+                                                                   line_gaussian_dilate_it, line_gaussian_dilate_ksize, line_gaussian_blur_ksize,
+                                                                   line_laplacian_ksize,
+                                                                   line_nn_choice
+                                                                   ], outputs=[line_res_gallery])
             upscale_event =  upscale_submit_btn.click(fn=self.upscale,inputs=[upscale_folder_upload,upscale_scale,upscale_model,upscale_sharpen,upscale_sharpen_mode,upscale_sharpen_ksize],outputs=[upscale_res_gallery])
             upscale_stop_btn.click(cancels=[upscale_event],fn=None)
+
+            line_process_options.change(fn=self.line_option,inputs=[line_process_options],outputs=[line_gaussian_dilate_it,line_gaussian_dilate_ksize,line_gaussian_blur_ksize,
+                                                                                                   line_laplacian_ksize,
+                                                                                                   line_nn_choice])
+
         demo.queue().launch(share=True)
 if __name__ == "__main__":
     ui = gradio_ui()

@@ -24,7 +24,7 @@ import subprocess
 import hashlib
 import json
 import gdown
-from utils.lineart_converter import *
+from utils.lineart_extractor import *
 from utils.upscaler import Upscaler
 from utils.extract_frames import *
 from utils.tagger import Tagger
@@ -47,6 +47,12 @@ class RefExtractor(object):
 
         # for upscaling
         self.upscaler = Upscaler()
+
+        # for line art
+        self.line_extractor = LineExtractor()
+        self.line_extractor.manga_model_path = "models/lineart/manga.pth"
+        self.line_extractor.sketch_model_path = "models/lineart/sketch.pth"
+
     def get_md5(self,img: np.ndarray):
         img = Image.fromarray(img)
         return hashlib.md5(img.tobytes()).hexdigest()
@@ -61,7 +67,7 @@ class RefExtractor(object):
         for model in models:
             print(model)
         return models
-    def extract_chara(self,video_path,output_format="imgs",mode="crop",frame_diff_threshold = 0.2,padding=0.0,conf_threshold=0.0,iou_threshold=0.6)->Path:
+    def extract_chara(self,video_path,output_format="imgs",mode="crop",frame_diff_threshold = 0.2,padding=0.0,conf_threshold=0.0,iou_threshold=0.6,min_bbox_size=0)->Path:
         '''
         :param video_path: path to
         :param output_format:
@@ -85,11 +91,18 @@ class RefExtractor(object):
                 if not target_folder.exists():
                     os.makedirs(target_folder)
                 self.extractor.video = video_path
-                keyframes:list[Frame] = self.extractor.extract_keyframes(frame_diff_threshold)
-                for frame in tqdm(keyframes):
-                    frame = frame.img
+                # keyframes:list[Frame] = self.extractor.extract_keyframes(frame_diff_threshold) # this will blow up the memory
+                frame_fnames:list[Path] = self.extractor.extract_keyframes2(frame_diff_threshold)
+                # for frame in tqdm(keyframes):
+                for frame_fname in tqdm(frame_fnames):
+                    # frame = frame.img
+                    frame_fname:Path
+                    print(frame_fname)
+                    frame = cv2.imread(frame_fname.resolve().__str__())
+                    frame_fname.unlink(missing_ok=True)
+
                     res:list[Results] = self.model.predict(frame,iou=iou_threshold,conf=conf_threshold)
-                    boxes = get_boxes(res)
+                    boxes = get_boxes(res,min_bbox_size=min_bbox_size)
                     pad_boxes(frame,boxes,scale=padding)
                     if mode=="crop":
                         res_imgs = crop_boxes(frame,boxes)
@@ -167,20 +180,21 @@ class RefExtractor(object):
         if w > h:
             border_h = int((w - h) / 2)
             res = cv2.copyMakeBorder(src=img, left=padding, right=padding, top=border_h+padding, bottom=border_h+padding,
-                                     borderType=cv2.BORDER_CONSTANT)
+                                     borderType=cv2.BORDER_CONSTANT,value=(255,255,255))
         elif h>w:
             border_w = int((h - w) / 2)
             res = cv2.copyMakeBorder(src=img, left=border_w+padding, right=border_w+padding, top=padding, bottom=padding,
-                                     borderType=cv2.BORDER_CONSTANT)
+                                     borderType=cv2.BORDER_CONSTANT,value=(255,255,255))
         else:
             res = cv2.copyMakeBorder(src=img, left= padding, right=padding, top=padding,
                                      bottom=padding,
-                                     borderType=cv2.BORDER_CONSTANT)
+                                     borderType=cv2.BORDER_CONSTANT,value=(255,255,255))
         return res
     def make_grid(self,imgs:list[np.ndarray], rows=3,cols=3):
         group_size = rows*cols
         for i in range(group_size-len(imgs)):
-            imgs.append(np.zeros_like(imgs[0]))
+            white = np.full_like(imgs[0],255)
+            imgs.append(white)
         for i in range(rows):
             if i == 0 :
                 res =np.hstack(imgs[i*cols:(i+1)*cols])
@@ -240,24 +254,47 @@ class RefExtractor(object):
 
 
 if __name__ == "__main__":
+    line_extractor = LineExtractor()
+    # line_extractor.manga_model_path = "models/lineart/manga.pth"
+    # line_extractor.sketch_model_path = "models/lineart/sketch.pth"
+    # folder = Path(r"D:\pycharmWorkspace\MangaLineExtraction_PyTorch\test")
+    # for f in list(folder.iterdir()):
+    #     img = cv2.imread(f.resolve().__str__())
+    #     # img = line_extractor.laplacian(img)
+    #     img = line_extractor.gaussian(img)
+    #     img = cv2.cvtColor(img,cv2.COLOR_GRAY2BGR)
+    #     # cv2.imshow("Laplacian",img)
+    #     # img = line_extractor.sketch_line(img)
+    #     img = line_extractor.manga_line_batch(img)
+    #     cv2.imshow(f.name,img)
+    # cv2.waitKey(-1)
 
-    cfg = DEFAULT_CFG
-    cfg.iou = 0.5
-    cfg.conf = 0.2
+    # from utils.Anime2Sketch.test import *
+    # input_folder = Path(r"D:\pycharmWorkspace\Anime2Sketch\test")
+    # output_folder = Path(r"D:\pycharmWorkspace\Anime2Sketch\test_sketch")
+    # model_path = r"D:\pycharmWorkspace\Anime2Sketch\weights\netG.pth"
+    # sketch_from_folder (input_folder,output_folder,model_path=model_path)
 
-    print(cfg)
-    # exit(0)
-    predictor: BasePredictor = DetectionPredictor(cfg=cfg)
-    predictor.save_dir = Path("test_pred")
 
-    video_path = r"D:\pycharmWorkspace\flaskProj\done\To love ru darkness opening HD.mp4"
-    extractor = Extractor(video_path,output_dir="temp")
-    extractor.video = video_path
-    lowf_vid = extractor.adjust_framerate(10)
-    audio_path = extractor.extract_audio(Path(lowf_vid))
-    # lowf_vid = r"D:\Git\OPENMI-TEAM-4-Project\temp\Lycoris Recoil 第3集—在线播放—樱花动漫[index.m3u8].mp4"
-    predictor ( source=lowf_vid, model=r"D:\Git\OPENMI-TEAM-4-Project\models\yolov8\AniRef40000-n-epoch40.pt")
-    torch.cuda.empty_cache()
+    # cfg = DEFAULT_CFG
+    # cfg.iou = 0.5
+    # cfg.conf = 0.2
+    #
+    # print(cfg)
+    # # exit(0)
+    # predictor: BasePredictor = DetectionPredictor(cfg=cfg)
+    # predictor.save_dir = Path("test_pred")
+    #
+    # video_path = r"D:\pycharmWorkspace\flaskProj\done\To love ru darkness opening HD.mp4"
+    # extractor = Extractor(video_path,output_dir="temp")
+    # extractor.video = video_path
+    # lowf_vid = extractor.adjust_framerate(10)
+    # audio_path = extractor.extract_audio(Path(lowf_vid))
+    # # lowf_vid = r"D:\Git\OPENMI-TEAM-4-Project\temp\Lycoris Recoil 第3集—在线播放—樱花动漫[index.m3u8].mp4"
+    # predictor ( source=lowf_vid, model=r"D:\Git\OPENMI-TEAM-4-Project\models\yolov8\AniRef40000-n-epoch40.pt")
+    # torch.cuda.empty_cache()
+
+
     # r = RefExtractor()
     # folder =Path (r"D:\pycharmWorkspace\OPENMI-TEAM-4-Project\output\video_to_imgs\crop\btr")
     # fs = list(folder.iterdir())

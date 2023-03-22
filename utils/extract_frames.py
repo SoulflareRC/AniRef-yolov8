@@ -49,6 +49,21 @@ class Extractor(object):
         end = time.time()
         print(f"Extracting keyframes with threshold {threshold} took {end-start} seconds!")
         return self.collect_frames()
+    def extract_keyframes2(self,threshold)->list[Path]:
+        '''
+        this version is for avoiding opencv exceeding memory when too many frames are extracted, just return the path to resulting files
+        '''
+        start = time.time()
+        # if os.path.exists(self.output_dir):
+        #     shutil.rmtree(self.output_dir)
+        os.makedirs(self.output_dir,exist_ok=True)
+        cmd = f"""ffmpeg -y -i "{self.video}" -vf "select='gt(scene,{threshold})'" -vsync vfr -frame_pts true "{self.output_dir}/%d.jpg" """
+        subprocess.run(cmd)
+        end = time.time()
+        print(f"Extracting keyframes with threshold {threshold} took {end-start} seconds!")
+        p = Path(self.output_dir)
+        frame_fnames = list(p.rglob("*.jpg"))
+        return frame_fnames
     def extract_IPBFrames(self,type):
         '''
         type should be one of {I,P,B}

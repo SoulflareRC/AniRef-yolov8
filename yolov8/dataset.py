@@ -11,14 +11,16 @@ import os
 import shutil
 import pathlib
 
-def get_boxes(pred:list[Results],conf_threshold=0.0)->list[Boxes]:
+def get_boxes(pred:list[Results],conf_threshold=0.0,min_bbox_size=0)->list[Boxes]:
     ret = []
     for res in pred:
         boxes = res.boxes
         # print(boxes.shape)
         for box in boxes:
             print(box.xyxy,box.shape)
-            if box.conf>conf_threshold:
+            w,h = int(box.xyxy[0][2]-box.xyxy[0][0]),(box.xyxy[0][3]-box.xyxy[0][1])
+            shorter_edge = min(w,h)
+            if box.conf>conf_threshold and shorter_edge>min_bbox_size :
                 ret.append(box)
     return ret
 def pad_boxes(img:np.ndarray,boxes:list[Boxes],scale=0.1)->list[Boxes]:
