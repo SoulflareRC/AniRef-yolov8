@@ -31,11 +31,12 @@ from utils.tagger import Tagger
 from yolov8.dataset import *
 
 class RefExtractor(object):
-    def __init__(self,model_path = None):
+    def __init__(self,model_path = None,models_folder = Path("models")):
         if model_path:
             self.model_path = model_path
-        self.models = self.grab_models()
-        self.model_path = Path("models/yolov8").joinpath(self.models[0]+".pt" if ".pt" not in self.models[0] else self.models[0])
+        self.models_folder = models_folder
+        self.models = self.grab_models(self.models_folder)
+        self.model_path =self.models_folder.joinpath("yolov8").joinpath(self.models[0]+".pt" if ".pt" not in self.models[0] else self.models[0])
         self.model:YOLO = None
         self.extractor = Extractor(video=None,output_dir="temp")
 
@@ -56,8 +57,8 @@ class RefExtractor(object):
     def get_md5(self,img: np.ndarray):
         img = Image.fromarray(img)
         return hashlib.md5(img.tobytes()).hexdigest()
-    def grab_models(self):
-        models_folder = Path("models")
+    def grab_models(self,models_folder:Path):
+        # models_folder = Path("models")
         if not models_folder.exists():
             models_folder_link = "https://drive.google.com/drive/folders/19Cnkg0y7kYq2uyC05E1DdLX24EEZjGlK?usp=share_link"
             gdown.download_folder(url=models_folder_link)
@@ -103,7 +104,7 @@ class RefExtractor(object):
 
                     res:list[Results] = self.model.predict(frame,iou=iou_threshold,conf=conf_threshold)
                     boxes = get_boxes(res,min_bbox_size=min_bbox_size)
-                    pad_boxes(frame,boxes,scale=padding)
+                    boxes = pad_boxes(frame,boxes,scale=padding)
                     if mode=="crop":
                         res_imgs = crop_boxes(frame,boxes)
                         for res_img in res_imgs:

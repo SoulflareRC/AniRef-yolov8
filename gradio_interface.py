@@ -14,8 +14,9 @@ import json
 from tqdm import tqdm
 from argparse import ArgumentParser
 class gradio_ui(object):
-    def __init__(self):
-        self.refextractor = RefExtractor()
+    def __init__(self,args):
+        self.args = args
+        self.refextractor = RefExtractor(Path(args.model_dir))
         charas_path = Path("characters.json")
         if charas_path.exists():
             with open(charas_path,'r') as f:
@@ -247,6 +248,8 @@ class gradio_ui(object):
                 elif nn_choice=="MangaLineExtraction":
                     print(img.shape)
                     img = self.refextractor.line_extractor.manga_line_batch(img)
+            # if img.
+            img = cv2.normalize(img,img,alpha=0,beta=255,norm_type=cv2.NORM_MINMAX,dtype=cv2.CV_8U)
             cv2.imwrite(output_folder.joinpath(str(len(list(output_folder.iterdir()))) + ".jpg").resolve().__str__(),
                         img)
             lines.append(img)
@@ -572,8 +575,16 @@ class gradio_ui(object):
             line_process_options.change(fn=self.line_option,inputs=[line_process_options],outputs=[line_gaussian_dilate_it,line_gaussian_dilate_ksize,line_gaussian_blur_ksize,
                                                                                                    line_laplacian_ksize,
                                                                                                    line_nn_choice])
-
-        demo.queue().launch(share=True)
+        if args.port is None:
+            demo.queue().launch(share=args.share,inbrowser=args.inbrowser)
+        else:
+            demo.queue().launch(share=args.share, inbrowser=args.inbrowser,server_port=args.port)
 if __name__ == "__main__":
-    ui = gradio_ui()
+    parser = ArgumentParser()
+    parser.add_argument("--share",action="store_true",default=False,help="Expose the web app to public.")
+    parser.add_argument("--inbrowser",action="store_true",default=False,help="Open the web app in browser.")
+    parser.add_argument("--port",type=int,nargs="?",help="Specify the server port, if not specified, then the app will assign a random port.")
+    parser.add_argument("--model_dir",default="models",type=str,help="Specify the models folder containing yolov8 and line art models.")
+    args = parser.parse_args()
+    ui = gradio_ui(args)
     ui.interface()
