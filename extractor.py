@@ -153,7 +153,7 @@ class RefExtractor(object):
         else:
             print("Video ",video_path," doesn't exist")
 
-    def lineart(self,img:np.ndarray,it_dilate=1, ksize_dilate=3,ksize_gausian=3)->np.ndarray:
+    def lineart(self,img:np.ndarray,it_dilate=1, ksize_dilate=7,ksize_gausian=3)->np.ndarray:
 
         img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # grayscale
         blurred_img = cv2.GaussianBlur(img_gray, (ksize_gausian, ksize_gausian), 0)  # remove noise from image

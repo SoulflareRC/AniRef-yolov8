@@ -302,9 +302,9 @@ class gradio_ui(object):
                                       interactive=True)
         threshold_slider = gr.Slider(minimum=0.0,maximum=1.0,value=0.2,step=0.05,label="Keyframe Threshold",info="Larger value means fewer keyframe extracted for imgs mode",interactive=True)
         padding_slider = gr.Slider(minimum=-0.5,maximum=1.0,value=0.0,step=0.05,label="Detection Padding",info="Pad the detection boxes(optional)",interactive=True)
-        conf_threshold_slider = gr.Slider(minimum=0.1, maximum=1.0, value=0.1,step=0.05, label="Detection Confidence Threshold",
+        conf_threshold_slider = gr.Slider(minimum=0.1, maximum=1.0, value=0.5,step=0.05, label="Detection Confidence Threshold",
                                      info="How confident the detection result has to be to be considered.", interactive=True)
-        iou_threshold_slider = gr.Slider(minimum=0.0, maximum=1.0, value=0.6, step=0.05,
+        iou_threshold_slider = gr.Slider(minimum=0.0, maximum=1.0, value=0.7, step=0.05,
                                           label="Box Merging(IOU) Threshold",
                                           info="How large the intersection of boxes has to be to be merged.",
                                           interactive=True)
@@ -395,7 +395,7 @@ class gradio_ui(object):
                                             minimum=1, maximum=20, value=1, step=1, interactive=True)
         line_gaussian_dilate_ksize = gr.Slider(label="Dilation kernel size",
                                                info="Higher value gives more lines but also more noises.",
-                                               minimum=1, maximum=15, value=3, step=2, interactive=True)
+                                               minimum=1, maximum=15, value=7, step=2, interactive=True)
         line_gaussian_blur_ksize = gr.Slider(label="Gaussian blur kernel size",
                                              info="You can play with this.",
                                              minimum=1, maximum=15, value=3, step=2, interactive=True)
