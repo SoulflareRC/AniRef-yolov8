@@ -20,7 +20,7 @@ We trained an object detection model for detecting anime characters based on the
   - Performance of the models worsens when there exists too many overlapping characters. 
   - AniRef40000-m-epoch75 was trained on an older version of the dataset for 40 epochs and needs a retrain. 
 ### Dataset
-The dataset is first collected with [Yet-Another-Anime-Segmenter](https://github.com/zymk9/Yet-Another-Anime-Segmenter) on keyframes of anime compilation videos from the internet, and then manually corrected on Roboflow. The most recent version includes 10k images(40k after augmentation) and the datasets are available on [google drive](https://drive.google.com/drive/folders/1q1F1pJhRNboJkdi8XVVRiL7-_aeBFvTh?usp=share_link).
+The lastest raw dataset is now uploaded on [Kaggle](https://www.kaggle.com/datasets/ruochongchen69/anidet-7000). The dataset is first collected with [Yet-Another-Anime-Segmenter](https://github.com/zymk9/Yet-Another-Anime-Segmenter) on keyframes of anime compilation videos from the internet, and then manually corrected on Roboflow. The most recent version includes 10k images(40k after augmentation) and the datasets are available on [google drive](https://drive.google.com/drive/folders/1q1F1pJhRNboJkdi8XVVRiL7-_aeBFvTh?usp=share_link).
 ### Installation
 1. Clone this repository 
 ``` 
